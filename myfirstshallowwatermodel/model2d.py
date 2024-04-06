@@ -347,18 +347,19 @@ class simple2dmodel:
             if self.plotting and tt%self.plot_interval == 0 and tt!=0:
                 self.save_figures(tt, cmap)
 
-class coriolis2dmodel:
+class channel2dmodel:
     
     def __init__(self, X:int=200, DX:float=1000, 
                  Y:int=200, DY:float=1000, 
                  DT:float=3., nt:int=3000, 
-                 H_0:float=1500., gravity:float=9.81, 
-                 initialc:str="c", omega:float=7.29E-5, lat:float=30, 
-                 rho_w:float=1025., period:float = 5000, 
+                 H_0:float=2500., gravity:float=9.81, 
+                 omega:float=7.29E-5, lat:float=30,
+                 period:float = 1500, 
+                 use_asselin:bool=False, asselin_value:float=0.1, asselin_step:int=1,
                  nesting:bool=False, nest_ratio:float=3, 
                  nestpos:tuple=(150,150,30,30), # tuple(x_origin, y_origin, width, height)
-                 dampening:int=10, plotting:bool=False, plot_path='sim_output', plot_interval:int=100,
-                 origin:tuple=(100,100), size:tuple=(2,2), maxh0:float=1.):
+                 dampening:int=10, plotting:bool=False, plot_path='sim_output', 
+                 plot_interval:int=100, maxh0:float=1.):
         """
         X, Y    : mesh size
         DX, DY  : mesh spacing [m]
@@ -379,8 +380,8 @@ class coriolis2dmodel:
         self.DT = DT
         self.nt = nt
         self.gravity = gravity
+        self.period = period
         self.H = np.ones((Y, X)) * H_0
-        self.condition = initialc
         self.h0 = np.zeros((Y, X))
         self.h1 = np.zeros((Y, X))
         self.h2 = np.zeros((Y, X))
@@ -397,9 +398,10 @@ class coriolis2dmodel:
         self.Yv = np.arange(self.Y)
         self.x_p, self.y_p = np.meshgrid(self.Xv, self.Yv)
         
-        self.originX = origin[0]
-        self.originY = origin[1]
-        self.size = size
+        self.asselin = use_asselin
+        self.asselin_coef = asselin_value
+        self.asselin_step = asselin_step
+        
         self.B = maxh0
         
         self.plotting = plotting
@@ -423,36 +425,19 @@ class coriolis2dmodel:
     def check_dir(self):
         if isdir(self.path) == False:
             mkdir(self.path)
-            
-    def create_perturbation0(self):
-        z = self.h0.copy()
-        for jj in range(int(self.Y/2-0.2*(self.Y/2)), int(self.Y/2 + 0.2*(self.Y/2)+1)):
-            for ii in range(int(self.X/2-0.2*(self.X/2)), int(self.X/2 + 0.2*(self.X/2)+1)):
-                r = np.sqrt((ii-np.round(self.X/2))**2 + (jj-np.round(self.Y/2))**2)
-                if r <=0.2*(self.X/2):
-                    z[jj,ii] = 0.5*(1+np.cos(np.pi*r/(0.2*(self.X/2))))
-        self.h0 = z.copy()
-     
     
-    def create_perturbation1(self):
-        z = self.h0.copy()
-        for jj in range(int(self.originY-0.2*(self.originY)), int(self.originY + 0.2*(self.originY)+1)):
-            for ii in range(int(self.originX-0.2*(self.originX)), int(self.originX + 0.2*(self.originX)+1)):
-                r = np.sqrt((ii-np.round(self.originX))**2 + (jj-np.round(self.originY))**2)
-                if r <=0.2*self.originX and r <=0.2*self.originY:
-                    z[jj,ii] = 0.5*(1+np.cos(np.pi*r/(0.2*(self.X/2))))
-        self.h0 = z.copy()
+    def create_perturbation(self, tt):
+        self.h1[1,:] = 0.5 * (1 + np.cos(np.pi + 2 * np.pi * (tt - 1)/self.period))
     
-    def create_perturbation2(self):
-        sigma_x = 0.2*self.x_p/self.size[0]
-        sigma_y = 0.2*self.x_p/self.size[1]
-        z = self.B * np.exp(-((self.x_p-self.originX)**2/(2*sigma_x**2) + (self.y_p-self.originY)**2/(2*sigma_y**2)))
-        z = np.nan_to_num(z)
-        self.h0 = z.copy()
-            
+    def boundary_conditions(self):
+       self.u0 = self.u1.copy()
+       self.v0 = self.v1.copy()
+       self.h0 = self.h1.copy()
+       self.u1 = self.u2.copy()
+       self.v1 = self.v2.copy()
+       self.h1 = self.h2.copy()
         
     def plot_initialcondition(self, cmap='bone'):
-        
         fig = plt.figure(figsize=(13,6), dpi=300)
         fig.suptitle(F'CFL:{self.CFL:06f}, timestep:0', fontsize=16)
         
@@ -498,15 +483,14 @@ class coriolis2dmodel:
         plt.close(fig)
     
     def forward_difference(self):
-
-        self.u1[:,1:-1] = self.u0[:,1:-1] - self.gravity * self.DT/self.DX * (self.h0[:,1:] - self.h0[:,:-1]) + self.f * self.DT * (self.v1[1:,1:] + self.v1[1:,:-1] + self.v1[:-1,1:] + self.v0[:-1,:-1])/4
-        self.v1[1:-1,:] = self.v0[1:-1,:] - self.gravity * self.DT/self.DY * (self.h0[1:,:] - self.h0[:-1,:]) - self.f * self.DT * (self.u1[1:,1:] + self.u1[:-1,1:] + self.u1[1:,:-1] + self.u0[:-1,:-1])/4
+        self.u1[:,1:-1] = self.u0[:,1:-1] - self.gravity * self.DT/self.DX * (self.h0[:,1:] - self.h0[:,:-1]) #+ self.f * self.DT * (self.v1[1:,1:] + self.v1[1:,:-1] + self.v1[:-1,1:] + self.v0[:-1,:-1])/4
+        self.v1[1:-1,:] = self.v0[1:-1,:] - self.gravity * self.DT/self.DY * (self.h0[1:,:] - self.h0[:-1,:]) #- self.f * self.DT * (self.u1[1:,1:] + self.u1[:-1,1:] + self.u1[1:,:-1] + self.u0[:-1,:-1])/4
         self.h1[1:-1, 1:-1] = self.h0[1:-1,1:-1] - self.H[1:-1,1:-1] * (self.DT/self.DX * (self.u0[1:-1,2:-1] - self.u0[1:-1,1:-2]) + self.DT/self.DY * (self.v0[2:-1,1:-1] - self.v0[1:-2,1:-1]))
         
         
     def centered_differences(self):
-        self.u2[:,1:-1] = self.u0[:,1:-1] - self.gravity * self.DT/self.DX * (self.h1[:,1:] - self.h1[:,:-1]) + self.f * self.DT * (self.v1[1:,1:] + self.v1[1:,:-1] + self.v1[:-1,1:] + self.v0[:-1,:-1])/2
-        self.v2[1:-1,:] = self.v0[1:-1,:] - self.gravity * self.DT/self.DY * (self.h1[1:,:] - self.h1[:-1,:]) - self.f * self.DT * (self.u1[1:,1:] + self.u1[:-1,1:] + self.u1[1:,:-1] + self.u0[:-1,:-1])/2
+        self.u2[:,1:-1] = self.u0[:,1:-1] - self.gravity * self.DT/self.DX * (self.h1[:,1:] - self.h1[:,:-1]) #+ self.f * self.DT * (self.v1[1:,1:] + self.v1[1:,:-1] + self.v1[:-1,1:] + self.v0[:-1,:-1])/2
+        self.v2[1:-1,:] = self.v0[1:-1,:] - self.gravity * self.DT/self.DY * (self.h1[1:,:] - self.h1[:-1,:]) #- self.f * self.DT * (self.u1[1:,1:] + self.u1[:-1,1:] + self.u1[1:,:-1] + self.u0[:-1,:-1])/2
         self.h2[1:-1, 1:-1] = self.h0[1:-1,1:-1] - self.H[1:-1,1:-1] * (self.DT/self.DX * (self.u1[1:-1,2:-1] - self.u1[1:-1,1:-2]) + self.DT/self.DY * (self.v1[2:-1,1:-1] - self.v1[1:-2,1:-1]))
         
     def centered_differences_nest(self):
@@ -590,9 +574,9 @@ class coriolis2dmodel:
                                    y=np.linspace(self.v_2.y[self.y0nest], self.v_2.y[self.y1nest], self.Yn+1)).data
     
     def apply_asselin(self):
-        self.u1 += 0.1 * (self.u0 - 2*self.u1 + self.u2)
-        self.v1 += 0.1 * (self.v0 - 2*self.v1 + self.v2)
-        self.h1 += 0.1 * (self.h0 - 2*self.h1 + self.h2)
+        self.u1 += self.asselin_coef * (self.u0 - 2*self.u1 + self.u2)
+        self.v1 += self.asselin_coef * (self.v0 - 2*self.v1 + self.v2)
+        self.h1 += self.asselin_coef * (self.h0 - 2*self.h1 + self.h2)
     
     def save_figures(self, tt, cmap='viridis'):
         
@@ -605,7 +589,7 @@ class coriolis2dmodel:
             ax1 = fig.add_subplot(1, 2, 1, projection='3d')
             ax2 = fig.add_subplot(1, 2, 2)
         
-        ax1.plot_surface(self.x_p, self.y_p, self.h2, cmap=cmap, edgecolor='none', antialiased=True, vmin=-0.5, vmax=0.5)
+        ax1.plot_surface(self.x_p, self.y_p, self.h2, cmap=cmap, edgecolor='none', antialiased=True)#, vmin=-0.5, vmax=0.5)
         ax1.set_xlabel('x (km)')
         ax1.set_ylabel('y (km)')
         ax1.set_zlabel('z (m)')
@@ -643,13 +627,8 @@ class coriolis2dmodel:
     
     
     def run(self, cmap:str='viridis'):
-        self.check_dir()
-        if self.condition == 'e':
-            self.create_perturbation2()
-        elif self.condition == 'c':
-            self.create_perturbation1()
-        else:
-            self.create_perturbation0()
+        if self.plotting:
+            self.check_dir()
                 
         if self.use_nest:
             self.create_masks()
@@ -658,12 +637,17 @@ class coriolis2dmodel:
         
             
         for tt in range(self.nt):
-            if tt == 0:
+            if tt <= self.period:
+                #print(F"Perturbando: {np.nanmax(self.h1)}")
+                self.create_perturbation(tt)
+            else:
+                self.boundary_conditions()
+            
+            if tt == 0:                
                 self.forward_difference()
-                self.apply_asselin()
-                self.u0 = self.u1.copy()
-                self.v0 = self.v1.copy()
-                self.h0 = self.h1.copy()
+                #self.u0 = self.u1.copy()
+                #self.v0 = self.v1.copy()
+                #self.h0 = self.h1.copy()
                 
                 if self.use_nest:
                     self.interp_nesting()
@@ -677,13 +661,14 @@ class coriolis2dmodel:
                     self.centered_differences_nest()
                 
                 self.centered_differences()
+                #self.u0 = self.u1.copy()
+                #self.v0 = self.v1.copy()
+                #self.h0 = self.h1.copy()
+                #self.u1 = self.u2.copy()
+                #self.v1 = self.v2.copy()
+                #self.h1 = self.h2.copy()
+            if self.asselin and tt%self.asselin_step==0 and tt!=0:
                 self.apply_asselin()
-                self.u0 = self.u1.copy()
-                self.v0 = self.v1.copy()
-                self.h0 = self.h1.copy()
-                self.u1 = self.u2.copy()
-                self.v1 = self.v2.copy()
-                self.h1 = self.h2.copy()
-            
+                
             if self.plotting and tt%self.plot_interval == 0 and tt!=0:
                 self.save_figures(tt, cmap)
