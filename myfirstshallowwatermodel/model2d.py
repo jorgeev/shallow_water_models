@@ -660,7 +660,7 @@ class coriolis2dmodel:
         for tt in range(self.nt):
             if tt == 0:
                 self.forward_difference()
-                #self.apply_asselin()
+                self.apply_asselin()
                 self.u0 = self.u1.copy()
                 self.v0 = self.v1.copy()
                 self.h0 = self.h1.copy()
@@ -677,7 +677,7 @@ class coriolis2dmodel:
                     self.centered_differences_nest()
                 
                 self.centered_differences()
-                #self.apply_asselin()
+                self.apply_asselin()
                 self.u0 = self.u1.copy()
                 self.v0 = self.v1.copy()
                 self.h0 = self.h1.copy()
