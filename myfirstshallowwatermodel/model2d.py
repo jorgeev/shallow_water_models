@@ -23,6 +23,7 @@ class simple2dmodel:
                  initialc:str="c", omega:float=7.29E-5, lat:float=30, 
                  rho_w:float=1025., period:float = 5000, 
                  nesting:bool=False, nest_ratio:float=3, 
+                 asselin_value:float=0.1, 
                  nestpos:tuple=(150,150,30,30), # tuple(x_origin, y_origin, width, height)
                  dampening:int=10, plotting:bool=False, plot_path='sim_output', plot_interval:int=100,
                  origin:tuple=(100,100), size:tuple=(2,2), maxh0:float=1.):
@@ -58,7 +59,7 @@ class simple2dmodel:
         self.v1 = np.zeros((Y+1, X))
         self.v2 = np.zeros((Y+1, X))
         self.CFL = np.sqrt(self.gravity*np.nanmax(self.H)) * self.DT/self.DX
-        self.f = 2 * np.pi * omega * np.sin(np.deg2rad(lat))
+        self.f = 2 * omega * np.sin(np.deg2rad(lat))
         
         self.Xv = np.arange(self.X)
         self.Yv = np.arange(self.Y)
@@ -72,6 +73,8 @@ class simple2dmodel:
         self.plotting = plotting
         self.path = plot_path
         self.plot_interval = plot_interval
+        
+        self.asselin_coef = asselin_value
         
         #for nested data
         if self.use_nest:
@@ -165,21 +168,20 @@ class simple2dmodel:
         plt.close(fig)
     
     def forward_difference(self):
-
-        self.u1[:,1:-1] = self.u0[:,1:-1] - self.gravity * self.DT/self.DX * (self.h0[:,1:] - self.h0[:,:-1]) #+ self.f * self.DT * (self.v0[1:,:-1] + self.v0[:-1,1:] + self.v0[1:,2:] + self.v0[:-1,:-2])/4
-        self.v1[1:-1,:] = self.v0[1:-1,:] - self.gravity * self.DT/self.DY * (self.h0[1:,:] - self.h0[:-1,:]) #+ self.f * self.DT * (u0[2:-1,1:-1] + u0[1:-2,1:-1] + u0[2:-1,:-1], u0[2:-1,1:])/4
+        self.u1[:,1:-1] = self.u0[:,1:-1] - 2 * self.gravity * self.DT/self.DX * (self.h0[:,1:] - self.h0[:,:-1]) + self.f * self.DT * (self.v1[1:,1:] + self.v1[1:,:-1] + self.v1[:-1,1:] + self.v0[:-1,:-1])/4
+        self.v1[1:-1,:] = self.v0[1:-1,:] - 2 * self.gravity * self.DT/self.DY * (self.h0[1:,:] - self.h0[:-1,:]) - self.f * self.DT * (self.u1[1:,1:] + self.u1[:-1,1:] + self.u1[1:,:-1] + self.u0[:-1,:-1])/4
         self.h1[1:-1, 1:-1] = self.h0[1:-1,1:-1] - self.H[1:-1,1:-1] * (self.DT/self.DX * (self.u0[1:-1,2:-1] - self.u0[1:-1,1:-2]) + self.DT/self.DY * (self.v0[2:-1,1:-1] - self.v0[1:-2,1:-1]))
         
         
     def centered_differences(self):
-        self.u2[:,1:-1] = self.u0[:,1:-1] - self.gravity * self.DT/self.DX * (self.h1[:,1:] - self.h1[:,:-1])
-        self.v2[1:-1,:] = self.v0[1:-1,:] - self.gravity * self.DT/self.DY * (self.h1[1:,:] - self.h1[:-1,:])
-        self.h2[1:-1, 1:-1] = self.h0[1:-1,1:-1] - self.H[1:-1,1:-1] * (self.DT/self.DX * (self.u1[1:-1,2:-1] - self.u1[1:-1,1:-2]) + self.DT/self.DY * (self.v1[2:-1,1:-1] - self.v1[1:-2,1:-1]))
+        self.u2[:,1:-1] = self.u0[:,1:-1] - 2 * self.gravity * self.DT/self.DX * (self.h1[:,1:] - self.h1[:,:-1]) + self.f * self.DT * (self.v1[1:,1:] + self.v1[1:,:-1] + self.v1[:-1,1:] + self.v0[:-1,:-1])/2
+        self.v2[1:-1,:] = self.v0[1:-1,:] - 2 * self.gravity * self.DT/self.DY * (self.h1[1:,:] - self.h1[:-1,:]) - self.f * self.DT * (self.u1[1:,1:] + self.u1[:-1,1:] + self.u1[1:,:-1] + self.u0[:-1,:-1])/2
+        self.h2[1:-1, 1:-1] = self.h0[1:-1,1:-1] - 2 * self.H[1:-1,1:-1] * (self.DT/self.DX * (self.u1[1:-1,2:-1] - self.u1[1:-1,1:-2]) + self.DT/self.DY * (self.v1[2:-1,1:-1] - self.v1[1:-2,1:-1]))
         
     def centered_differences_nest(self):
-        self.u_2[:,1:-1] = self.u_0[:,1:-1] - self.gravity * self.DTn/self.DXn * (self.h_1[:,1:] - self.h_1[:,:-1])
-        self.v_2[1:-1,:] = self.v_0[1:-1,:] - self.gravity * self.DTn/self.DYn * (self.h_1[1:,:] - self.h_1[:-1,:])
-        self.h_2[1:-1, 1:-1] = self.h_0[1:-1,1:-1] - self.H2[1:-1,1:-1] * self.DTn/self.DYn * (self.u_1[1:-1,2:-1] - self.u_1[1:-1,1:-2] + self.v_1[2:-1,1:-1] - self.v_1[1:-2,1:-1])
+        self.u_2[:,1:-1] = self.u_0[:,1:-1] - 2 * self.gravity * self.DTn/self.DXn * (self.h_1[:,1:] - self.h_1[:,:-1])
+        self.v_2[1:-1,:] = self.v_0[1:-1,:] - 2 * self.gravity * self.DTn/self.DYn * (self.h_1[1:,:] - self.h_1[:-1,:])
+        self.h_2[1:-1, 1:-1] = self.h_0[1:-1,1:-1] - 2 * self.H2[1:-1,1:-1] * self.DTn/self.DYn * (self.u_1[1:-1,2:-1] - self.u_1[1:-1,1:-2] + self.v_1[2:-1,1:-1] - self.v_1[1:-2,1:-1])
     
     def create_masks(self):
         Is = self.dampening
@@ -301,8 +303,11 @@ class simple2dmodel:
         plt.cla()
         plt.clf()
         plt.close(fig)
-        
     
+    def apply_asselin(self):
+        self.u1 += self.asselin_coef * (self.u0 - 2*self.u1 + self.u2)
+        self.v1 += self.asselin_coef * (self.v0 - 2*self.v1 + self.v2)
+        self.h1 += self.asselin_coef * (self.h0 - 2*self.h1 + self.h2)
     
     def run(self, cmap:str='viridis'):
         self.check_dir()
@@ -320,7 +325,15 @@ class simple2dmodel:
         
             
         for tt in range(self.nt):
+            self.u1[:,1]  = 0
+            self.u1[:,-2] = 0
+            self.v1[1,:]  = 0
+            self.v1[-2,:] = 0
+            self.h1[0,:] = 0
+            self.h1[-1,:] = 0
+            
             if tt == 0:
+
                 self.forward_difference()
                 self.u0 = self.u1.copy()
                 self.v0 = self.v1.copy()
@@ -343,6 +356,8 @@ class simple2dmodel:
                 self.u1 = self.u2.copy()
                 self.v1 = self.v2.copy()
                 self.h1 = self.h2.copy()
+            
+            self.apply_asselin()
             
             if self.plotting and tt%self.plot_interval == 0 and tt!=0:
                 self.save_figures(tt, cmap)
@@ -436,6 +451,11 @@ class channel2dmodel:
        self.u1 = self.u2.copy()
        self.v1 = self.v2.copy()
        self.h1 = self.h2.copy()
+       
+       self.u1[:,0]  = 0
+       self.u1[:,-1] = 0
+       self.v1[0,:]  = 0
+       self.v1[-1,:] = 0
         
     def plot_initialcondition(self, cmap='bone'):
         fig = plt.figure(figsize=(13,6), dpi=300)
@@ -483,19 +503,20 @@ class channel2dmodel:
         plt.close(fig)
     
     def forward_difference(self):
-        self.u1[:,1:-1] = self.u0[:,1:-1] - self.gravity * self.DT/self.DX * (self.h0[:,1:] - self.h0[:,:-1]) #+ self.f * self.DT * (self.v1[1:,1:] + self.v1[1:,:-1] + self.v1[:-1,1:] + self.v0[:-1,:-1])/4
-        self.v1[1:-1,:] = self.v0[1:-1,:] - self.gravity * self.DT/self.DY * (self.h0[1:,:] - self.h0[:-1,:]) #- self.f * self.DT * (self.u1[1:,1:] + self.u1[:-1,1:] + self.u1[1:,:-1] + self.u0[:-1,:-1])/4
+        self.u1[:,1:-1] = self.u0[:,1:-1] - 2 * self.gravity * self.DT/self.DX * (self.h0[:,1:] - self.h0[:,:-1]) + self.f * self.DT * (self.v1[1:,1:] + self.v1[1:,:-1] + self.v1[:-1,1:] + self.v0[:-1,:-1])/4
+        self.v1[1:-1,:] = self.v0[1:-1,:] - 2 * self.gravity * self.DT/self.DY * (self.h0[1:,:] - self.h0[:-1,:]) - self.f * self.DT * (self.u1[1:,1:] + self.u1[:-1,1:] + self.u1[1:,:-1] + self.u0[:-1,:-1])/4
         self.h1[1:-1, 1:-1] = self.h0[1:-1,1:-1] - self.H[1:-1,1:-1] * (self.DT/self.DX * (self.u0[1:-1,2:-1] - self.u0[1:-1,1:-2]) + self.DT/self.DY * (self.v0[2:-1,1:-1] - self.v0[1:-2,1:-1]))
         
         
     def centered_differences(self):
-        self.u2[:,1:-1] = self.u0[:,1:-1] - self.gravity * self.DT/self.DX * (self.h1[:,1:] - self.h1[:,:-1]) #+ self.f * self.DT * (self.v1[1:,1:] + self.v1[1:,:-1] + self.v1[:-1,1:] + self.v0[:-1,:-1])/2
-        self.v2[1:-1,:] = self.v0[1:-1,:] - self.gravity * self.DT/self.DY * (self.h1[1:,:] - self.h1[:-1,:]) #- self.f * self.DT * (self.u1[1:,1:] + self.u1[:-1,1:] + self.u1[1:,:-1] + self.u0[:-1,:-1])/2
+        self.u2[:,1:-1] = self.u0[:,1:-1] - 2 * self.gravity * self.DT/self.DX * (self.h1[:,1:] - self.h1[:,:-1]) + self.f * self.DT * (self.v1[1:,1:] + self.v1[1:,:-1] + self.v1[:-1,1:] + self.v0[:-1,:-1])/2
+        self.v2[1:-1,:] = self.v0[1:-1,:] - 2 * self.gravity * self.DT/self.DY * (self.h1[1:,:] - self.h1[:-1,:]) - self.f * self.DT * (self.u1[1:,1:] + self.u1[:-1,1:] + self.u1[1:,:-1] + self.u0[:-1,:-1])/2
         self.h2[1:-1, 1:-1] = self.h0[1:-1,1:-1] - self.H[1:-1,1:-1] * (self.DT/self.DX * (self.u1[1:-1,2:-1] - self.u1[1:-1,1:-2]) + self.DT/self.DY * (self.v1[2:-1,1:-1] - self.v1[1:-2,1:-1]))
+
         
     def centered_differences_nest(self):
-        self.u_2[:,1:-1] = self.u_0[:,1:-1] - self.gravity * self.DTn/self.DXn * (self.h_1[:,1:] - self.h_1[:,:-1])
-        self.v_2[1:-1,:] = self.v_0[1:-1,:] - self.gravity * self.DTn/self.DYn * (self.h_1[1:,:] - self.h_1[:-1,:])
+        self.u_2[:,1:-1] = self.u_0[:,1:-1] - 2 * self.gravity * self.DTn/self.DXn * (self.h_1[:,1:] - self.h_1[:,:-1])
+        self.v_2[1:-1,:] = self.v_0[1:-1,:] - 2 * self.gravity * self.DTn/self.DYn * (self.h_1[1:,:] - self.h_1[:-1,:])
         self.h_2[1:-1, 1:-1] = self.h_0[1:-1,1:-1] - self.H2[1:-1,1:-1] * self.DTn/self.DYn * (self.u_1[1:-1,2:-1] - self.u_1[1:-1,1:-2] + self.v_1[2:-1,1:-1] - self.v_1[1:-2,1:-1])
     
     def create_masks(self):
@@ -645,9 +666,6 @@ class channel2dmodel:
             
             if tt == 0:                
                 self.forward_difference()
-                #self.u0 = self.u1.copy()
-                #self.v0 = self.v1.copy()
-                #self.h0 = self.h1.copy()
                 
                 if self.use_nest:
                     self.interp_nesting()
@@ -661,12 +679,7 @@ class channel2dmodel:
                     self.centered_differences_nest()
                 
                 self.centered_differences()
-                #self.u0 = self.u1.copy()
-                #self.v0 = self.v1.copy()
-                #self.h0 = self.h1.copy()
-                #self.u1 = self.u2.copy()
-                #self.v1 = self.v2.copy()
-                #self.h1 = self.h2.copy()
+                
             if self.asselin and tt%self.asselin_step==0 and tt!=0:
                 self.apply_asselin()
                 
