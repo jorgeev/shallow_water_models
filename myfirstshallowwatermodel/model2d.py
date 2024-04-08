@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Swallow water model in 2D with support to host a nesting inside the domain
-version 2024.04.05
+version 2024.04.08
 author jorgeev@github.com
 """
 
@@ -21,7 +21,7 @@ class simple2dmodel:
                  DT:float=3., nt:int=3000, 
                  H_0:float=1500., gravity:float=9.81, 
                  initialc:str="c", omega:float=7.29E-5, lat:float=30, 
-                 rho_w:float=1025., period:float = 5000, 
+                 period:float = 5000, 
                  nesting:bool=False, nest_ratio:float=3, 
                  asselin_value:float=0.1, 
                  nestpos:tuple=(150,150,30,30), # tuple(x_origin, y_origin, width, height)
@@ -114,8 +114,8 @@ class simple2dmodel:
         self.h0 = z.copy()
     
     def create_perturbation2(self):
-        sigma_x = 0.2*self.x_p/self.size[0]
-        sigma_y = 0.2*self.x_p/self.size[1]
+        sigma_x = 0.2*self.X/self.size[0]
+        sigma_y = 0.2*self.X/self.size[1] 
         z = self.B * np.exp(-((self.x_p-self.originX)**2/(2*sigma_x**2) + (self.y_p-self.originY)**2/(2*sigma_y**2)))
         z = np.nan_to_num(z)
         self.h0 = z.copy()
@@ -168,8 +168,8 @@ class simple2dmodel:
         plt.close(fig)
     
     def forward_difference(self):
-        self.u1[:,1:-1] = self.u0[:,1:-1] - 2 * self.gravity * self.DT/self.DX * (self.h0[:,1:] - self.h0[:,:-1]) + self.f * self.DT * (self.v1[1:,1:] + self.v1[1:,:-1] + self.v1[:-1,1:] + self.v0[:-1,:-1])/4
-        self.v1[1:-1,:] = self.v0[1:-1,:] - 2 * self.gravity * self.DT/self.DY * (self.h0[1:,:] - self.h0[:-1,:]) - self.f * self.DT * (self.u1[1:,1:] + self.u1[:-1,1:] + self.u1[1:,:-1] + self.u0[:-1,:-1])/4
+        self.u1[:,1:-1] = self.u0[:,1:-1] -  self.gravity * self.DT/self.DX * (self.h0[:,1:] - self.h0[:,:-1]) + self.f * self.DT * (self.v1[1:,1:] + self.v1[1:,:-1] + self.v1[:-1,1:] + self.v0[:-1,:-1])/4
+        self.v1[1:-1,:] = self.v0[1:-1,:] -  self.gravity * self.DT/self.DY * (self.h0[1:,:] - self.h0[:-1,:]) - self.f * self.DT * (self.u1[1:,1:] + self.u1[:-1,1:] + self.u1[1:,:-1] + self.u0[:-1,:-1])/4
         self.h1[1:-1, 1:-1] = self.h0[1:-1,1:-1] - self.H[1:-1,1:-1] * (self.DT/self.DX * (self.u0[1:-1,2:-1] - self.u0[1:-1,1:-2]) + self.DT/self.DY * (self.v0[2:-1,1:-1] - self.v0[1:-2,1:-1]))
         
         
@@ -309,6 +309,58 @@ class simple2dmodel:
         self.v1 += self.asselin_coef * (self.v0 - 2*self.v1 + self.v2)
         self.h1 += self.asselin_coef * (self.h0 - 2*self.h1 + self.h2)
     
+    def update_uvh(self, tt):
+        if tt!=0:
+            self.u0 = self.u1.copy()
+            self.v0 = self.v1.copy()
+            self.h0 = self.h1.copy()
+            self.u1 = self.u2.copy()
+            self.v1 = self.v2.copy()
+            self.h1 = self.h2.copy()
+        else:
+            self.u0 = self.u1.copy()
+            self.v0 = self.v1.copy()
+            self.h0 = self.h1.copy()
+       
+    def boundary_conditions(self):
+       self.u1[:,1]  = 0
+       self.u1[:,-2] = 0
+       self.v1[1,:]  = 0
+       self.v1[-2,:] = 0
+    
+    def plot_speed(self,tt):
+        fig, ((ax1,ax2),(ax3,ax4)) = plt.subplots(2,2,figsize=(12,6), dpi=300)
+        pc1 = ax1.pcolormesh(self.h2, vmin=-0.5, vmax=0.5, cmap='PRGn')
+        plt.colorbar(pc1, ax=ax1,label='h (m)')
+        ax1.set_ylabel('y')
+        ax1.axhline(100,linestyle='--', color='0.5')
+        ax1.set_aspect(1)
+
+        ax2.plot(self.h2[150,:], 'g-')
+        ax2.plot(self.u2[150,:], 'r-')
+        ax2.plot(self.v2[150,:], 'b-')
+        ax2.set_ylabel('h (m)')
+        #ax2.set_ylim(-0.5,0.5)
+
+        pc3 = ax3.pcolormesh(self.u2, cmap='RdBu')#, vmin=-1E-3, vmax=1E-3,)
+        plt.colorbar(pc3, ax=ax3,label='u (m/s)')
+        ax3.set_xlabel('x')
+        ax3.axhline(100,linestyle='--', color='0.5')
+        ax3.set_aspect(1)
+
+        pc4 = ax4.pcolormesh(self.v2, cmap='RdBu')#, vmin=-1E-3, vmax=1E-3,)
+        plt.colorbar(pc4, ax=ax4,label='v (m/s)')
+        ax4.set_xlabel('x')
+        ax4.set_ylabel('y')
+        ax4.axhline(100,linestyle='--', color='0.5')
+        ax4.set_aspect(1)
+        
+        plt.savefig(F'{self.path}/sp_{tt:06d}.jpg', bbox_inches='tight', pad_inches=0.1)
+        plt.cla()
+        plt.clf()
+        plt.close(fig)
+       
+    
     def run(self, cmap:str='viridis'):
         self.check_dir()
         if self.condition == 'e':
@@ -325,19 +377,13 @@ class simple2dmodel:
         
             
         for tt in range(self.nt):
-            self.u1[:,1]  = 0
-            self.u1[:,-2] = 0
-            self.v1[1,:]  = 0
-            self.v1[-2,:] = 0
-            self.h1[0,:] = 0
-            self.h1[-1,:] = 0
+            #if tt != 0:
+            self.boundary_conditions()
             
             if tt == 0:
 
                 self.forward_difference()
-                self.u0 = self.u1.copy()
-                self.v0 = self.v1.copy()
-                self.h0 = self.h1.copy()
+                
                 if self.use_nest:
                     self.interp_nesting()
                     
@@ -350,17 +396,13 @@ class simple2dmodel:
                     self.centered_differences_nest()
                 
                 self.centered_differences()
-                self.u0 = self.u1.copy()
-                self.v0 = self.v1.copy()
-                self.h0 = self.h1.copy()
-                self.u1 = self.u2.copy()
-                self.v1 = self.v2.copy()
-                self.h1 = self.h2.copy()
-            
-            self.apply_asselin()
+
+            self.update_uvh(tt)
+            #self.apply_asselin()
             
             if self.plotting and tt%self.plot_interval == 0 and tt!=0:
                 self.save_figures(tt, cmap)
+                self.plot_speed(tt)
 
 class channel2dmodel:
     
@@ -444,7 +486,7 @@ class channel2dmodel:
     def create_perturbation(self, tt):
         self.h1[1,:] = 0.5 * (1 + np.cos(np.pi + 2 * np.pi * (tt - 1)/self.period))
     
-    def boundary_conditions(self):
+    def update_uvh(self):
        self.u0 = self.u1.copy()
        self.v0 = self.v1.copy()
        self.h0 = self.h1.copy()
@@ -452,6 +494,7 @@ class channel2dmodel:
        self.v1 = self.v2.copy()
        self.h1 = self.h2.copy()
        
+    def boundary_conditions(self):
        self.u1[:,0]  = 0
        self.u1[:,-1] = 0
        self.v1[0,:]  = 0
