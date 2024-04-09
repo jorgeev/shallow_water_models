@@ -60,6 +60,9 @@ class simple2dmodel:
         self.v2 = np.zeros((Y+1, X))
         self.CFL = np.sqrt(self.gravity*np.nanmax(self.H)) * self.DT/self.DX
         self.f = 2 * omega * np.sin(np.deg2rad(lat))
+        self.E_k = np.zeros(nt)
+        self.E_p = np.zeros(nt)
+        self.vol = np.zeros(nt)
         
         self.Xv = np.arange(self.X)
         self.Yv = np.arange(self.Y)
@@ -359,7 +362,22 @@ class simple2dmodel:
         plt.cla()
         plt.clf()
         plt.close(fig)
-       
+      
+    def get_kinetic_energy(self,ii):
+        """
+        E_k = H/2 * SUM(u2^2 + v2^2) * dx*dy
+        """
+        #self.E_k[ii] = 0.5 * np.sum(self.H[:,:] * (self.u2[:,:-1]**2  + self.v2[:-1,:]**2)) * self.DX * self.DY
+        self.E_k[ii] = 0.5 * np.sum((self.H[:,:] * (self.u2[:,:-1]**2  + self.v2[:-1,:]**2))[1:-1, 1:-1]) * self.DX * self.DY
+    
+    def get_potential_energy(self,ii):
+        """
+        E_p = g/2 * SUM(h2^2) * dx * dy
+        """
+        self.E_p[ii] = 0.5 * self.gravity * np.sum((self.h2 ** 2)[1:-1, 1:-1]) * self.DX * self.DY
+        
+    def calc_volume(self, ii):
+        self.vol[ii] = np.nansum(np.abs(self.h2)[4:-4, 4:-4]) * self.DX * self.DY
     
     def run(self, cmap:str='viridis'):
         self.check_dir()
@@ -377,11 +395,9 @@ class simple2dmodel:
         
             
         for tt in range(self.nt):
-            #if tt != 0:
             self.boundary_conditions()
             
             if tt == 0:
-
                 self.forward_difference()
                 
                 if self.use_nest:
@@ -396,9 +412,14 @@ class simple2dmodel:
                     self.centered_differences_nest()
                 
                 self.centered_differences()
-
+                
+                
+            self.apply_asselin()
             self.update_uvh(tt)
-            #self.apply_asselin()
+            
+            self.get_kinetic_energy(tt)
+            self.get_potential_energy(tt)
+            self.calc_volume(tt)
             
             if self.plotting and tt%self.plot_interval == 0 and tt!=0:
                 self.save_figures(tt, cmap)
@@ -725,6 +746,7 @@ class channel2dmodel:
                 
             if self.asselin and tt%self.asselin_step==0 and tt!=0:
                 self.apply_asselin()
-                
+             
+            
             if self.plotting and tt%self.plot_interval == 0 and tt!=0:
                 self.save_figures(tt, cmap)
