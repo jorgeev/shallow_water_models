@@ -8,8 +8,8 @@ Created on Mon Apr  8 21:44:32 2024
 from myfirstshallowwatermodel.model2d import channel2dmodel as sw2d
 import matplotlib.pyplot as plt
 
-model2 = sw2d(X=200, Y=400, H_0=2500, nt=5000, nesting=True, DT=1, 
-              omega=20*7.29E-5, use_asselin=True,
+model2 = sw2d(X=200, Y=400, H_0=2500, nt=5000, nesting=False, DT=1, 
+              omega=20*7.29E-5, use_asselin=False, period=1500,
               asselin_value=0.1, asselin_step=1, calculate_metrics=True,
               DX=1000, DY=1000, nestpos=(140,200,55,50), plotting=True, 
               nest_ratio=5,
