@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Swallow water model in 2D with support to host a nesting inside the domain
-version 2024.04.08
+version 2024.04.08T23
 author jorgeev@github.com
 """
 
@@ -720,16 +720,16 @@ class channel2dmodel:
         #ax2.plot(self.u2[:,200], 'r-')
         #ax2.plot(self.v2[:,200], 'b-')
         ax2.set_ylabel('h (m)')
-        ax2.set_ylim(-1.2,1.2)
+        ax2.set_ylim(-1.5,1.5)
         ax2.grid()
 
-        pc3 = ax3.pcolormesh(self.u2.T, cmap='RdBu', vmin=-1, vmax=1)
+        pc3 = ax3.pcolormesh(self.u2.T, cmap='RdBu', vmin=-0.5, vmax=0.5)
         plt.colorbar(pc3, ax=ax3,label='u (m/s)')
         ax3.set_xlabel('y')
         ax3.axhline(100,linestyle='--', color='0.5')
         ax3.set_aspect(1)
 
-        pc4 = ax4.pcolormesh(self.v2.T, cmap='RdBu', vmin=-5, vmax=5,)
+        pc4 = ax4.pcolormesh(self.v2.T, cmap='RdBu', vmin=-2, vmax=2,)
         plt.colorbar(pc4, ax=ax4,label='v (m/s)')
         ax4.set_xlabel('y')
         ax4.set_ylabel('x')
