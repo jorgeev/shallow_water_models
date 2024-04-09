@@ -547,51 +547,6 @@ class channel2dmodel:
         if tt>self.period:
             self.h1[1] = 0
         
-    def plot_initialcondition(self, cmap='bone'):
-        fig = plt.figure(figsize=(13,6), dpi=300)
-        fig.suptitle(F'CFL:{self.CFL:06f}, timestep:0', fontsize=16)
-        
-        if self.use_nest:
-            ax1 = fig.add_subplot(2, 2, 1, projection='3d')
-            ax2 = fig.add_subplot(2, 2, 2)
-        else:
-            ax1 = fig.add_subplot(1, 2, 1, projection='3d')
-            ax2 = fig.add_subplot(1, 2, 2)
-        
-        ax1.plot_surface(self.x_p, self.y_p, self.h0, cmap=cmap, edgecolor='none', antialiased=True, vmin=-0.5, vmax=0.5)
-        ax1.set_xlabel('x (km)')
-        ax1.set_ylabel('y (km)')
-        ax1.set_zlabel('z (m)')
-        
-        img = ax2.pcolormesh(self.x_p, self.y_p, self.h0, vmin=-0.5, vmax=0.5, cmap=cmap)
-        if self.use_nest:
-            roi = patches.Rectangle((self.roi[0], self.roi[1]), self.roi[2], self.roi[3], linewidth=1, edgecolor='r', facecolor='none')
-            ax2.add_patch(roi)
-        ax2.set_xlabel('x (km)')
-        ax2.set_ylabel('y (km)')
-        ax2.set_aspect(1)
-        
-        if self.use_nest:
-            ax3 = fig.add_subplot(2, 2, 3, projection='3d')
-            ax4 = fig.add_subplot(2, 2, 4)
-            ax3.plot_surface(self.xnm/1000, self.ynm/1000, self.h_0, cmap=cmap, edgecolor='none', antialiased=True, vmin=-0.5, vmax=0.5)
-            ax3.set_xlabel('x (km)')
-            ax3.set_ylabel('y (km)')
-            ax3.set_zlabel('z (m)')
-            
-            ax4.pcolormesh(self.xnm/1000, self.ynm/1000, self.h_0, vmin=-0.5, vmax=0.5, cmap=cmap)
-            ax4.set_xlabel('x (km)')
-            ax4.set_ylabel('y (km)')
-            ax4.set_aspect(1)
-        
-        fig.subplots_adjust(right=0.8)
-        cbar_ax = fig.add_axes([0.85, 0.15, 0.025, 0.7])
-        fig.colorbar(img, cax=cbar_ax, label='$h$ (m)')
-        plt.savefig(F'{self.path}/{0:06d}.jpg', bbox_inches='tight', pad_inches=0.1)
-        plt.cla()
-        plt.clf()
-        plt.close(fig)
-    
     def forward_difference(self):
         self.u1[:,1:-1] = self.u0[:,1:-1] -  self.gravity * self.DT/self.DX * (self.h0[:,1:] - self.h0[:,:-1]) + self.f * self.DT * (self.v1[1:,1:] + self.v1[1:,:-1] + self.v1[:-1,1:] + self.v1[:-1,:-1])/4
         self.v1[1:-1,:] = self.v0[1:-1,:] -  self.gravity * self.DT/self.DY * (self.h0[1:,:] - self.h0[:-1,:]) - self.f * self.DT * (self.u1[1:,1:] + self.u1[:-1,1:] + self.u1[1:,:-1] + self.u1[:-1,:-1])/4
@@ -717,19 +672,17 @@ class channel2dmodel:
         ax2.plot(self.h2[:,100], 'g-')
         ax2.plot(self.h2[:,190], 'r-')
         ax2.plot(self.h2[:,10], 'b-')
-        #ax2.plot(self.u2[:,200], 'r-')
-        #ax2.plot(self.v2[:,200], 'b-')
         ax2.set_ylabel('h (m)')
         ax2.set_ylim(-1.5,1.5)
         ax2.grid()
 
-        pc3 = ax3.pcolormesh(self.u2.T, cmap='RdBu', vmin=-0.1, vmax=0.1)
+        pc3 = ax3.pcolormesh(self.u2.T, cmap='RdBu_r', vmin=-0.1, vmax=0.1)
         plt.colorbar(pc3, ax=ax3,label='u (m/s)')
         ax3.set_xlabel('y')
         ax3.axhline(100,linestyle='--', color='0.5')
         ax3.set_aspect(1)
 
-        pc4 = ax4.pcolormesh(self.v2.T, cmap='RdBu', vmin=-0.1, vmax=0.1)
+        pc4 = ax4.pcolormesh(self.v2.T, cmap='RdBu_r', vmin=-0.1, vmax=0.1)
         plt.colorbar(pc4, ax=ax4,label='v (m/s)')
         ax4.set_xlabel('y')
         ax4.set_ylabel('x')
@@ -742,47 +695,54 @@ class channel2dmodel:
         plt.close(fig)
     
     def save_figures(self, tt, cmap='viridis'):
-        
         fig = plt.figure(figsize=(13,6), dpi=300)
         fig.suptitle(F'CFL:{self.CFL:06f}, timestep:{tt}', fontsize=16)
         if self.use_nest:
             ax1 = fig.add_subplot(2, 2, 1, projection='3d')
             ax2 = fig.add_subplot(2, 2, 2)
+            ax3 = fig.add_subplot(2, 2, 3, projection='3d')
+            ax4 = fig.add_subplot(2, 2, 4)
+            roi = patches.Rectangle((self.roi[1], self.roi[0]), self.roi[3], self.roi[2], 
+                                    linewidth=1, edgecolor='r', facecolor='none', zorder=100)
+            ax2.add_patch(roi)
+            
+            ax3.set_xlabel('y (km)')
+            ax3.set_ylabel('x (km)')
+            ax3.set_zlabel('z (m)')
+            ax4.set_xlabel('y (km)')
+            ax4.set_ylabel('x (km)')
         else:
             ax1 = fig.add_subplot(1, 2, 1, projection='3d')
             ax2 = fig.add_subplot(1, 2, 2)
-        
-        #ax1.plot_surface(self.x_p[1:-1,1:-1], self.y_p[1:-1,1:-1], self.h2[1:-1,1:-1], cmap=cmap, edgecolor='none', antialiased=True)#, vmin=-0.5, vmax=0.5)
-        ax1.plot_surface(self.y_p[1:-1,1:-1].T, self.x_p[1:-1,1:-1].T, self.h2[1:-1,1:-1].T, cmap=cmap, edgecolor='none', antialiased=True, vmin=-1, vmax=1)
+            
+            
+        if tt == 0:
+            ax1.plot_surface(self.y_p[1:-1,1:-1].T, self.x_p[1:-1,1:-1].T, self.h1[1:-1,1:-1].T, cmap=cmap, edgecolor='none', antialiased=True, vmin=-1, vmax=1)
+            img = ax2.pcolormesh(self.y_p.T, self.x_p.T,self.h1.T, vmin=-1, vmax=1, cmap=cmap)
+            if self.use_nest:
+                ax4.pcolormesh(self.ynm.T/1000, self.xnm.T/1000, self.h_1.T, vmin=-1, vmax=1, cmap=cmap)
+                ax3.plot_surface(self.xnm/1000, self.ynm/1000, self.h_1, cmap=cmap, edgecolor='none', antialiased=True, vmin=-0.5, vmax=0.5)
+                ax4.set_aspect(1)
+        else:
+            ax1.plot_surface(self.y_p[1:-1,1:-1].T, self.x_p[1:-1,1:-1].T, self.h2[1:-1,1:-1].T, cmap=cmap, edgecolor='none', antialiased=True, vmin=-1, vmax=1)
+            img = ax2.pcolormesh(self.h2.T, vmin=-1, vmax=1, cmap=cmap)
+            if self.use_nest:
+                ax4.pcolormesh(self.ynm.T/1000, self.xnm.T/1000, self.h_2.T, vmin=-1, vmax=1, cmap=cmap)
+                ax3.plot_surface(self.ynm.T/1000, self.xnm.T/1000, self.h_2.T, cmap=cmap, edgecolor='none', antialiased=True, vmin=-0.5, vmax=0.5)
+                ax4.set_aspect(1)
+                         
+        ax2.set_aspect(1)        
         ax1.set_xlabel('y (km)')
         ax1.set_ylabel('x (km)')
         ax1.set_zlabel('z (m)')
+        ax2.set_xlabel('y (km)')
+        ax2.set_ylabel('x (km)')
         
-        img = ax2.pcolormesh(self.h2.T, vmin=-1, vmax=1, cmap=cmap)
-        if self.use_nest:
-            roi = patches.Rectangle((self.roi[1], self.roi[0]), self.roi[3], self.roi[2], linewidth=1, edgecolor='r', facecolor='none')
-            ax2.add_patch(roi)
-        ax2.set_xlabel('x (km)')
-        ax2.set_ylabel('y (km)')
-        ax2.set_aspect(1)
-        
-        if self.use_nest:
-            ax3 = fig.add_subplot(2, 2, 3, projection='3d')
-            ax4 = fig.add_subplot(2, 2, 4)
-            
-            ax3.plot_surface(self.xnm/1000, self.ynm/1000, self.h_2, cmap=cmap, edgecolor='none', antialiased=True, vmin=-0.5, vmax=0.5)
-            ax3.set_xlabel('x (km)')
-            ax3.set_ylabel('y (km)')
-            ax3.set_zlabel('z (m)')
-            
-            ax4.pcolormesh(self.h_2.T, vmin=-1, vmax=1, cmap=cmap)
-            ax4.set_xlabel('y (km)')
-            ax4.set_ylabel('x (km)')
-            ax4.set_aspect(1)
         
         fig.subplots_adjust(right=0.8)
         cbar_ax = fig.add_axes([0.85, 0.15, 0.025, 0.7])
         fig.colorbar(img, cax=cbar_ax, label='$h$ (m)')
+        #plt.show()
         plt.savefig(F'{self.path}/{tt:06d}.jpg', bbox_inches='tight', pad_inches=0.1)
         plt.cla()
         plt.clf()
@@ -801,7 +761,6 @@ class channel2dmodel:
             
         for tt in range(self.nt):
             if tt <= self.period:
-                #print(F"Perturbando: {np.nanmax(self.h1)}")
                 self.create_perturbation(tt)
             
             self.boundary_conditions(tt)
@@ -811,9 +770,6 @@ class channel2dmodel:
                 
                 if self.use_nest:
                     self.interp_nesting()
-                    
-                if self.plotting:
-                    self.plot_initialcondition(cmap=cmap)
                     
             else:
                 if self.use_nest:
@@ -832,6 +788,6 @@ class channel2dmodel:
                 self.get_potential_energy(tt)
                 self.calc_volume(tt)
             
-            if self.plotting and tt%self.plot_interval == 0 and tt!=0:
+            if self.plotting and tt%self.plot_interval == 0:
                 self.save_figures(tt, cmap)
                 self.plot_speed(tt)
