@@ -723,13 +723,13 @@ class channel2dmodel:
         ax2.set_ylim(-1.5,1.5)
         ax2.grid()
 
-        pc3 = ax3.pcolormesh(self.u2.T, cmap='RdBu', vmin=-0.2, vmax=0.2)
+        pc3 = ax3.pcolormesh(self.u2.T, cmap='RdBu', vmin=-0.1, vmax=0.1)
         plt.colorbar(pc3, ax=ax3,label='u (m/s)')
         ax3.set_xlabel('y')
         ax3.axhline(100,linestyle='--', color='0.5')
         ax3.set_aspect(1)
 
-        pc4 = ax4.pcolormesh(self.v2.T, cmap='RdBu', vmin=-1, vmax=1)
+        pc4 = ax4.pcolormesh(self.v2.T, cmap='RdBu', vmin=-0.1, vmax=0.1)
         plt.colorbar(pc4, ax=ax4,label='v (m/s)')
         ax4.set_xlabel('y')
         ax4.set_ylabel('x')
