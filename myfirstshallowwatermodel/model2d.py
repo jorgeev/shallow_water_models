@@ -377,7 +377,7 @@ class simple2dmodel:
         self.E_p[ii] = 0.5 * self.gravity * np.sum((self.h2 ** 2)[1:-1, 1:-1]) * self.DX * self.DY
         
     def calc_volume(self, ii):
-        self.vol[ii] = np.nansum(np.abs(self.h2)[4:-4, 4:-4]) * self.DX * self.DY
+        self.vol[ii] = np.nansum(np.abs(self.h2)[1:-1, 1:-1]) * self.DX * self.DY
     
     def run(self, cmap:str='viridis'):
         self.check_dir()

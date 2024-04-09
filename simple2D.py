@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Created on Fri Apr  5 12:48:55 2024
-Last update Mon Apr 8 10:00  2024
+Last update Mon Apr 8 18:30  2024
 @author: je.velasco@atmosfera.unam.mx
 """
 
@@ -11,7 +11,7 @@ from myfirstshallowwatermodel.model2d import simple2dmodel as sw2d
 import matplotlib.pyplot as plt
 
 model2 = sw2d(X=300, Y=200, H_0=1500, nt=10000, nesting=False, DT=1, 
-              omega=7.29E-5, origin=(150,100), initialc='e', asselin_value=0.05,
+              omega=7.29E-5, origin=(150,100), initialc='e', asselin_value=0.1,
               DX=1000, DY=1000, nestpos=(50,100,30,50), plotting=True, # use_asselin=True,
               plot_interval=1000, size=(4,4), maxh0=1.)
 
