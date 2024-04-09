@@ -17,7 +17,6 @@ model2 = sw2d(X=200, Y=400, H_0=2500, nt=5000, nesting=True, DT=1,
 
 model2.run(cmap='twilight_shifted')
 
-
 fig, ax = plt.subplots(4,1,figsize=(12,6), dpi=300, sharex=True)
 ax[0].plot(model2.E_k)
 ax[1].plot(model2.E_p)
