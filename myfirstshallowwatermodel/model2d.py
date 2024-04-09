@@ -23,7 +23,8 @@ class simple2dmodel:
                  initialc:str="c", omega:float=7.29E-5, lat:float=30, 
                  period:float = 5000, 
                  nesting:bool=False, nest_ratio:float=3, 
-                 asselin_value:float=0.1, 
+                 use_asselin:bool=False, asselin_value:float=0.1, asselin_step:int=1, 
+                 calculate_metrics:bool=False,
                  nestpos:tuple=(150,150,30,30), # tuple(x_origin, y_origin, width, height)
                  dampening:int=10, plotting:bool=False, plot_path='sim_output', plot_interval:int=100,
                  origin:tuple=(100,100), size:tuple=(2,2), maxh0:float=1.):
@@ -60,9 +61,6 @@ class simple2dmodel:
         self.v2 = np.zeros((Y+1, X))
         self.CFL = np.sqrt(self.gravity*np.nanmax(self.H)) * self.DT/self.DX
         self.f = 2 * omega * np.sin(np.deg2rad(lat))
-        self.E_k = np.zeros(nt)
-        self.E_p = np.zeros(nt)
-        self.vol = np.zeros(nt)
         
         self.Xv = np.arange(self.X)
         self.Yv = np.arange(self.Y)
@@ -77,9 +75,19 @@ class simple2dmodel:
         self.path = plot_path
         self.plot_interval = plot_interval
         
+        # Asselin parameters
+        self.asselin = use_asselin
         self.asselin_coef = asselin_value
+        self.asselin_step = asselin_step
         
-        #for nested data
+        # for metrics calculation
+        self.metrics = calculate_metrics
+        if self.metrics:
+            self.E_k = np.zeros(nt)
+            self.E_p = np.zeros(nt)
+            self.vol = np.zeros(nt)
+        
+        # for nested data
         if self.use_nest:
             self.roi = nestpos
             self.dampening = dampening
@@ -171,19 +179,19 @@ class simple2dmodel:
         plt.close(fig)
     
     def forward_difference(self):
-        self.u1[:,1:-1] = self.u0[:,1:-1] -  self.gravity * self.DT/self.DX * (self.h0[:,1:] - self.h0[:,:-1]) + self.f * self.DT * (self.v1[1:,1:] + self.v1[1:,:-1] + self.v1[:-1,1:] + self.v0[:-1,:-1])/4
-        self.v1[1:-1,:] = self.v0[1:-1,:] -  self.gravity * self.DT/self.DY * (self.h0[1:,:] - self.h0[:-1,:]) - self.f * self.DT * (self.u1[1:,1:] + self.u1[:-1,1:] + self.u1[1:,:-1] + self.u0[:-1,:-1])/4
+        self.u1[:,1:-1] = self.u0[:,1:-1] -  self.gravity * self.DT/self.DX * (self.h0[:,1:] - self.h0[:,:-1]) + self.f * self.DT * (self.v1[1:,1:] + self.v1[1:,:-1] + self.v1[:-1,1:] + self.v1[:-1,:-1])/4
+        self.v1[1:-1,:] = self.v0[1:-1,:] -  self.gravity * self.DT/self.DY * (self.h0[1:,:] - self.h0[:-1,:]) - self.f * self.DT * (self.u1[1:,1:] + self.u1[:-1,1:] + self.u1[1:,:-1] + self.u1[:-1,:-1])/4
         self.h1[1:-1, 1:-1] = self.h0[1:-1,1:-1] - self.H[1:-1,1:-1] * (self.DT/self.DX * (self.u0[1:-1,2:-1] - self.u0[1:-1,1:-2]) + self.DT/self.DY * (self.v0[2:-1,1:-1] - self.v0[1:-2,1:-1]))
         
         
     def centered_differences(self):
-        self.u2[:,1:-1] = self.u0[:,1:-1] - 2 * self.gravity * self.DT/self.DX * (self.h1[:,1:] - self.h1[:,:-1]) + self.f * self.DT * (self.v1[1:,1:] + self.v1[1:,:-1] + self.v1[:-1,1:] + self.v0[:-1,:-1])/2
-        self.v2[1:-1,:] = self.v0[1:-1,:] - 2 * self.gravity * self.DT/self.DY * (self.h1[1:,:] - self.h1[:-1,:]) - self.f * self.DT * (self.u1[1:,1:] + self.u1[:-1,1:] + self.u1[1:,:-1] + self.u0[:-1,:-1])/2
+        self.u2[:,1:-1] = self.u0[:,1:-1] - 2 * self.gravity * self.DT/self.DX * (self.h1[:,1:] - self.h1[:,:-1]) + self.f * self.DT * (self.v1[1:,1:] + self.v1[1:,:-1] + self.v1[:-1,1:] + self.v1[:-1,:-1])/2
+        self.v2[1:-1,:] = self.v0[1:-1,:] - 2 * self.gravity * self.DT/self.DY * (self.h1[1:,:] - self.h1[:-1,:]) - self.f * self.DT * (self.u1[1:,1:] + self.u1[:-1,1:] + self.u1[1:,:-1] + self.u1[:-1,:-1])/2
         self.h2[1:-1, 1:-1] = self.h0[1:-1,1:-1] - 2 * self.H[1:-1,1:-1] * (self.DT/self.DX * (self.u1[1:-1,2:-1] - self.u1[1:-1,1:-2]) + self.DT/self.DY * (self.v1[2:-1,1:-1] - self.v1[1:-2,1:-1]))
         
     def centered_differences_nest(self):
-        self.u_2[:,1:-1] = self.u_0[:,1:-1] - 2 * self.gravity * self.DTn/self.DXn * (self.h_1[:,1:] - self.h_1[:,:-1])
-        self.v_2[1:-1,:] = self.v_0[1:-1,:] - 2 * self.gravity * self.DTn/self.DYn * (self.h_1[1:,:] - self.h_1[:-1,:])
+        self.u_2[:,1:-1] = self.u_0[:,1:-1] - 2 * self.gravity * self.DTn/self.DXn * (self.h_1[:,1:] - self.h_1[:,:-1]) + self.f * self.DTn * (self.v_1[1:,1:] + self.v_1[1:,:-1] + self.v_1[:-1,1:] + self.v_1[:-1,:-1])/4
+        self.v_2[1:-1,:] = self.v_0[1:-1,:] - 2 * self.gravity * self.DTn/self.DYn * (self.h_1[1:,:] - self.h_1[:-1,:]) - self.f * self.DTn * (self.u_1[1:,1:] + self.u_1[:-1,1:] + self.u_1[1:,:-1] + self.u_1[:-1,:-1])/4
         self.h_2[1:-1, 1:-1] = self.h_0[1:-1,1:-1] - 2 * self.H2[1:-1,1:-1] * self.DTn/self.DYn * (self.u_1[1:-1,2:-1] - self.u_1[1:-1,1:-2] + self.v_1[2:-1,1:-1] - self.v_1[1:-2,1:-1])
     
     def create_masks(self):
@@ -414,16 +422,19 @@ class simple2dmodel:
                 self.centered_differences()
                 
                 
-            self.apply_asselin()
+            if self.asselin and tt%self.asselin_step==0 and tt!=0:
+               self.apply_asselin()
+               
             self.update_uvh(tt)
             
-            self.get_kinetic_energy(tt)
-            self.get_potential_energy(tt)
-            self.calc_volume(tt)
+            if self.metrics:
+                self.get_kinetic_energy(tt)
+                self.get_potential_energy(tt)
+                self.calc_volume(tt)
             
             if self.plotting and tt%self.plot_interval == 0 and tt!=0:
                 self.save_figures(tt, cmap)
-                self.plot_speed(tt)
+                # self.plot_speed(tt)
 
 class channel2dmodel:
     
@@ -434,10 +445,11 @@ class channel2dmodel:
                  omega:float=7.29E-5, lat:float=30,
                  period:float = 1500, 
                  use_asselin:bool=False, asselin_value:float=0.1, asselin_step:int=1,
-                 nesting:bool=False, nest_ratio:float=3, 
+                 nesting:bool=False, nest_ratio:float=3,
+                 calculate_metrics:bool=False,
                  nestpos:tuple=(150,150,30,30), # tuple(x_origin, y_origin, width, height)
                  dampening:int=10, plotting:bool=False, plot_path='sim_output', 
-                 plot_interval:int=100, maxh0:float=1.):
+                 plot_interval:int=100):
         """
         X, Y    : mesh size
         DX, DY  : mesh spacing [m]
@@ -476,15 +488,21 @@ class channel2dmodel:
         self.Yv = np.arange(self.Y)
         self.x_p, self.y_p = np.meshgrid(self.Xv, self.Yv)
         
+        # Asselin parameters
         self.asselin = use_asselin
         self.asselin_coef = asselin_value
         self.asselin_step = asselin_step
         
-        self.B = maxh0
-        
         self.plotting = plotting
         self.path = plot_path
         self.plot_interval = plot_interval
+        
+        # for metrics calculation
+        self.metrics = calculate_metrics
+        if self.metrics:
+            self.E_k = np.zeros(nt)
+            self.E_p = np.zeros(nt)
+            self.vol = np.zeros(nt)
         
         #for nested data
         if self.use_nest:
@@ -507,19 +525,27 @@ class channel2dmodel:
     def create_perturbation(self, tt):
         self.h1[1,:] = 0.5 * (1 + np.cos(np.pi + 2 * np.pi * (tt - 1)/self.period))
     
-    def update_uvh(self):
-       self.u0 = self.u1.copy()
-       self.v0 = self.v1.copy()
-       self.h0 = self.h1.copy()
-       self.u1 = self.u2.copy()
-       self.v1 = self.v2.copy()
-       self.h1 = self.h2.copy()
+    def update_uvh(self, tt):
+        if tt!=0:
+            self.u0 = self.u1.copy()
+            self.v0 = self.v1.copy()
+            self.h0 = self.h1.copy()
+            self.u1 = self.u2.copy()
+            self.v1 = self.v2.copy()
+            self.h1 = self.h2.copy()
+        else:
+            self.u0 = self.u1.copy()
+            self.v0 = self.v1.copy()
+            self.h0 = self.h1.copy()
        
-    def boundary_conditions(self):
-       self.u1[:,0]  = 0
-       self.u1[:,-1] = 0
-       self.v1[0,:]  = 0
-       self.v1[-1,:] = 0
+    def boundary_conditions(self, tt):
+        self.u1[:,1]  = 0
+        self.u1[:,-2] = 0
+        self.v1[1,:]  = 0
+        self.v1[-2,:] = 0
+        
+        if tt>self.period:
+            self.h1[1] = 0
         
     def plot_initialcondition(self, cmap='bone'):
         fig = plt.figure(figsize=(13,6), dpi=300)
@@ -567,21 +593,20 @@ class channel2dmodel:
         plt.close(fig)
     
     def forward_difference(self):
-        self.u1[:,1:-1] = self.u0[:,1:-1] - 2 * self.gravity * self.DT/self.DX * (self.h0[:,1:] - self.h0[:,:-1]) + self.f * self.DT * (self.v1[1:,1:] + self.v1[1:,:-1] + self.v1[:-1,1:] + self.v0[:-1,:-1])/4
-        self.v1[1:-1,:] = self.v0[1:-1,:] - 2 * self.gravity * self.DT/self.DY * (self.h0[1:,:] - self.h0[:-1,:]) - self.f * self.DT * (self.u1[1:,1:] + self.u1[:-1,1:] + self.u1[1:,:-1] + self.u0[:-1,:-1])/4
+        self.u1[:,1:-1] = self.u0[:,1:-1] -  self.gravity * self.DT/self.DX * (self.h0[:,1:] - self.h0[:,:-1]) + self.f * self.DT * (self.v1[1:,1:] + self.v1[1:,:-1] + self.v1[:-1,1:] + self.v1[:-1,:-1])/4
+        self.v1[1:-1,:] = self.v0[1:-1,:] -  self.gravity * self.DT/self.DY * (self.h0[1:,:] - self.h0[:-1,:]) - self.f * self.DT * (self.u1[1:,1:] + self.u1[:-1,1:] + self.u1[1:,:-1] + self.u1[:-1,:-1])/4
         self.h1[1:-1, 1:-1] = self.h0[1:-1,1:-1] - self.H[1:-1,1:-1] * (self.DT/self.DX * (self.u0[1:-1,2:-1] - self.u0[1:-1,1:-2]) + self.DT/self.DY * (self.v0[2:-1,1:-1] - self.v0[1:-2,1:-1]))
         
         
     def centered_differences(self):
-        self.u2[:,1:-1] = self.u0[:,1:-1] - 2 * self.gravity * self.DT/self.DX * (self.h1[:,1:] - self.h1[:,:-1]) + self.f * self.DT * (self.v1[1:,1:] + self.v1[1:,:-1] + self.v1[:-1,1:] + self.v0[:-1,:-1])/2
-        self.v2[1:-1,:] = self.v0[1:-1,:] - 2 * self.gravity * self.DT/self.DY * (self.h1[1:,:] - self.h1[:-1,:]) - self.f * self.DT * (self.u1[1:,1:] + self.u1[:-1,1:] + self.u1[1:,:-1] + self.u0[:-1,:-1])/2
-        self.h2[1:-1, 1:-1] = self.h0[1:-1,1:-1] - self.H[1:-1,1:-1] * (self.DT/self.DX * (self.u1[1:-1,2:-1] - self.u1[1:-1,1:-2]) + self.DT/self.DY * (self.v1[2:-1,1:-1] - self.v1[1:-2,1:-1]))
-
+        self.u2[:,1:-1] = self.u0[:,1:-1] - 2 * self.gravity * self.DT/self.DX * (self.h1[:,1:] - self.h1[:,:-1]) + self.f * self.DT * (self.v1[1:,1:] + self.v1[1:,:-1] + self.v1[:-1,1:] + self.v1[:-1,:-1])/2
+        self.v2[1:-1,:] = self.v0[1:-1,:] - 2 * self.gravity * self.DT/self.DY * (self.h1[1:,:] - self.h1[:-1,:]) - self.f * self.DT * (self.u1[1:,1:] + self.u1[:-1,1:] + self.u1[1:,:-1] + self.u1[:-1,:-1])/2
+        self.h2[1:-1, 1:-1] = self.h0[1:-1,1:-1] - 2 * self.H[1:-1,1:-1] * (self.DT/self.DX * (self.u1[1:-1,2:-1] - self.u1[1:-1,1:-2]) + self.DT/self.DY * (self.v1[2:-1,1:-1] - self.v1[1:-2,1:-1]))
         
     def centered_differences_nest(self):
-        self.u_2[:,1:-1] = self.u_0[:,1:-1] - 2 * self.gravity * self.DTn/self.DXn * (self.h_1[:,1:] - self.h_1[:,:-1])
-        self.v_2[1:-1,:] = self.v_0[1:-1,:] - 2 * self.gravity * self.DTn/self.DYn * (self.h_1[1:,:] - self.h_1[:-1,:])
-        self.h_2[1:-1, 1:-1] = self.h_0[1:-1,1:-1] - self.H2[1:-1,1:-1] * self.DTn/self.DYn * (self.u_1[1:-1,2:-1] - self.u_1[1:-1,1:-2] + self.v_1[2:-1,1:-1] - self.v_1[1:-2,1:-1])
+        self.u_2[:,1:-1] = self.u_0[:,1:-1] - 2 * self.gravity * self.DTn/self.DXn * (self.h_1[:,1:] - self.h_1[:,:-1]) + self.f * self.DTn * (self.v_1[1:,1:] + self.v_1[1:,:-1] + self.v_1[:-1,1:] + self.v_1[:-1,:-1])/4
+        self.v_2[1:-1,:] = self.v_0[1:-1,:] - 2 * self.gravity * self.DTn/self.DYn * (self.h_1[1:,:] - self.h_1[:-1,:]) - self.f * self.DTn * (self.u_1[1:,1:] + self.u_1[:-1,1:] + self.u_1[1:,:-1] + self.u_1[:-1,:-1])/4
+        self.h_2[1:-1, 1:-1] = self.h_0[1:-1,1:-1] - 2 * self.H2[1:-1,1:-1] * self.DTn/self.DYn * (self.u_1[1:-1,2:-1] - self.u_1[1:-1,1:-2] + self.v_1[2:-1,1:-1] - self.v_1[1:-2,1:-1])
     
     def create_masks(self):
         Is = self.dampening
@@ -662,6 +687,58 @@ class channel2dmodel:
         self.u1 += self.asselin_coef * (self.u0 - 2*self.u1 + self.u2)
         self.v1 += self.asselin_coef * (self.v0 - 2*self.v1 + self.v2)
         self.h1 += self.asselin_coef * (self.h0 - 2*self.h1 + self.h2)
+        
+    def get_kinetic_energy(self,ii):
+        """
+        E_k = H/2 * SUM(u2^2 + v2^2) * dx * dy
+        """
+        self.E_k[ii] = 0.5 * np.sum((self.H[:,:] * (self.u2[:,:-1]**2  + self.v2[:-1,:]**2))[1:-1, 1:-1]) * self.DX * self.DY
+    
+    def get_potential_energy(self,ii):
+        """
+        E_p = g/2 * SUM(h2^2) * dx * dy
+        """
+        self.E_p[ii] = 0.5 * self.gravity * np.sum((self.h2 ** 2)[1:-1, 1:-1]) * self.DX * self.DY
+        
+    def calc_volume(self, ii):
+        self.vol[ii] = np.nansum(np.abs(self.h2)[1:-1, 1:-1]) * self.DX * self.DY
+    
+    def plot_speed(self, tt):
+        fig, ((ax1,ax2),(ax3,ax4)) = plt.subplots(2,2,figsize=(12,6), dpi=300)
+        fig.suptitle(F'CFL:{self.CFL:06f}, timestep:{tt}', fontsize=16)
+        pc1 = ax1.pcolormesh(self.h2.T, vmin=-1, vmax=1, cmap='PRGn')
+        plt.colorbar(pc1, ax=ax1,label='h (m)')
+        ax1.set_ylabel('x')
+        ax1.axhline(100,linestyle='--', color='g', linewidth=0.8)
+        ax1.axhline(180,linestyle='--', color='r', linewidth=0.8)
+        ax1.axhline(20,linestyle='--', color='b', linewidth=0.8)
+        ax1.set_aspect(1)
+
+        ax2.plot(self.h2[:,100], 'g-')
+        ax2.plot(self.h2[:,180], 'r-')
+        ax2.plot(self.h2[:,20], 'b-')
+        #ax2.plot(self.u2[:,200], 'r-')
+        #ax2.plot(self.v2[:,200], 'b-')
+        ax2.set_ylabel('h (m)')
+        ax2.set_ylim(-1,1)
+
+        pc3 = ax3.pcolormesh(self.u2.T, cmap='RdBu', vmin=-1, vmax=1)
+        plt.colorbar(pc3, ax=ax3,label='u (m/s)')
+        ax3.set_xlabel('y')
+        ax3.axhline(100,linestyle='--', color='0.5')
+        ax3.set_aspect(1)
+
+        pc4 = ax4.pcolormesh(self.v2.T, cmap='RdBu', vmin=-5, vmax=5,)
+        plt.colorbar(pc4, ax=ax4,label='v (m/s)')
+        ax4.set_xlabel('y')
+        ax4.set_ylabel('x')
+        ax4.axhline(100,linestyle='--', color='0.5')
+        ax4.set_aspect(1)
+        
+        plt.savefig(F'{self.path}/sp_{tt:06d}.jpg', bbox_inches='tight', pad_inches=0.1)
+        plt.cla()
+        plt.clf()
+        plt.close(fig)
     
     def save_figures(self, tt, cmap='viridis'):
         
@@ -674,14 +751,14 @@ class channel2dmodel:
             ax1 = fig.add_subplot(1, 2, 1, projection='3d')
             ax2 = fig.add_subplot(1, 2, 2)
         
-        ax1.plot_surface(self.x_p, self.y_p, self.h2, cmap=cmap, edgecolor='none', antialiased=True)#, vmin=-0.5, vmax=0.5)
+        ax1.plot_surface(self.x_p[1:-1,1:-1], self.y_p[1:-1,1:-1], self.h2[1:-1,1:-1], cmap=cmap, edgecolor='none', antialiased=True)#, vmin=-0.5, vmax=0.5)
         ax1.set_xlabel('x (km)')
         ax1.set_ylabel('y (km)')
         ax1.set_zlabel('z (m)')
         
-        img = ax2.pcolormesh(self.x_p, self.y_p, self.h2, vmin=-0.5, vmax=0.5, cmap=cmap)
+        img = ax2.pcolormesh(self.h2.T, vmin=-1, vmax=1, cmap=cmap)
         if self.use_nest:
-            roi = patches.Rectangle((self.roi[0], self.roi[1]), self.roi[2], self.roi[3], linewidth=1, edgecolor='r', facecolor='none')
+            roi = patches.Rectangle((self.roi[1], self.roi[0]), self.roi[3], self.roi[2], linewidth=1, edgecolor='r', facecolor='none')
             ax2.add_patch(roi)
         ax2.set_xlabel('x (km)')
         ax2.set_ylabel('y (km)')
@@ -696,9 +773,9 @@ class channel2dmodel:
             ax3.set_ylabel('y (km)')
             ax3.set_zlabel('z (m)')
             
-            ax4.pcolormesh(self.xnm/1000, self.ynm/1000, self.h_2, vmin=-0.5, vmax=0.5, cmap=cmap)
-            ax4.set_xlabel('x (km)')
-            ax4.set_ylabel('y (km)')
+            ax4.pcolormesh(self.h_2.T, vmin=-1, vmax=1, cmap=cmap)
+            ax4.set_xlabel('y (km)')
+            ax4.set_ylabel('x (km)')
             ax4.set_aspect(1)
         
         fig.subplots_adjust(right=0.8)
@@ -709,8 +786,7 @@ class channel2dmodel:
         plt.clf()
         plt.close(fig)
         
-    
-    
+       
     def run(self, cmap:str='viridis'):
         if self.plotting:
             self.check_dir()
@@ -725,8 +801,8 @@ class channel2dmodel:
             if tt <= self.period:
                 #print(F"Perturbando: {np.nanmax(self.h1)}")
                 self.create_perturbation(tt)
-            else:
-                self.boundary_conditions()
+            
+            self.boundary_conditions(tt)
             
             if tt == 0:                
                 self.forward_difference()
@@ -746,7 +822,14 @@ class channel2dmodel:
                 
             if self.asselin and tt%self.asselin_step==0 and tt!=0:
                 self.apply_asselin()
-             
+                
+            self.update_uvh(tt)
+            
+            if self.metrics:
+                self.get_kinetic_energy(tt)
+                self.get_potential_energy(tt)
+                self.calc_volume(tt)
             
             if self.plotting and tt%self.plot_interval == 0 and tt!=0:
                 self.save_figures(tt, cmap)
+                self.plot_speed(tt)
