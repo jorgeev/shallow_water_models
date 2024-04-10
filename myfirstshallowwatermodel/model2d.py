@@ -89,6 +89,7 @@ class simple2dmodel:
         
         # for nested data
         if self.use_nest:
+            self.nest_ratio = nest_ratio
             self.roi = nestpos
             self.dampening = dampening
             self.Xn = nestpos[2] * nest_ratio + 1 
@@ -100,6 +101,24 @@ class simple2dmodel:
             self.x1nest = nestpos[0] + nestpos[2] + 1
             self.y0nest = nestpos[1]
             self.y1nest = nestpos[1] + nestpos[3] + 1
+            
+            self.u_1 = np.zeros([self.Yn, self.Xn + 1])
+            self.u_2 = np.zeros([self.Yn, self.Xn + 1])
+            self.v_1 = np.zeros([self.Yn + 1, self.Xn])
+            self.v_2 = np.zeros([self.Yn + 1, self.Xn])
+            self.h_1 = np.zeros([self.Yn, self.Xn])
+            self.h_2 = np.zeros([self.Yn, self.Xn])
+            # Parametros para la interpolacion de dominios
+            self.xh_xa = np.arange(self.X)
+            self.yh_xa = np.arange(self.Y)
+            self.xu_xa = np.arange(-0.5,self.X+0.5)*self.DX
+            self.yv_xa = np.arange(-0.5,self.Y+0.5)*self.DY
+            self.t0 = np.arange(2)        
+            self.xh_tg = np.linspace(self.xh_xa[self.x0nest], self.xh_xa[self.x1nest], self.Xn)
+            self.yh_tg = np.linspace(self.yh_xa[self.y0nest], self.yh_xa[self.y1nest], self.Yn)
+            self.xu_tg = np.linspace(self.xu_xa[self.x0nest], self.xu_xa[self.x1nest], self.Xn+1)
+            self.yv_tg = np.linspace(self.yv_xa[self.y0nest], self.yv_xa[self.y1nest], self.Yn+1)
+            self.tt_tg = np.linspace(0, 1, self.nest_ratio)
             
     def check_dir(self):
         if isdir(self.path) == False:
@@ -130,59 +149,11 @@ class simple2dmodel:
         z = self.B * np.exp(-((self.x_p-self.originX)**2/(2*sigma_x**2) + (self.y_p-self.originY)**2/(2*sigma_y**2)))
         z = np.nan_to_num(z)
         self.h0 = z.copy()
-            
-        
-    def plot_initialcondition(self, cmap='bone'):
-        
-        fig = plt.figure(figsize=(13,6), dpi=300)
-        fig.suptitle(F'CFL:{self.CFL:06f}, timestep:0', fontsize=16)
-        
-        if self.use_nest:
-            ax1 = fig.add_subplot(2, 2, 1, projection='3d')
-            ax2 = fig.add_subplot(2, 2, 2)
-        else:
-            ax1 = fig.add_subplot(1, 2, 1, projection='3d')
-            ax2 = fig.add_subplot(1, 2, 2)
-        
-        ax1.plot_surface(self.x_p, self.y_p, self.h0, cmap=cmap, edgecolor='none', antialiased=True, vmin=-0.5, vmax=0.5)
-        ax1.set_xlabel('x (km)')
-        ax1.set_ylabel('y (km)')
-        ax1.set_zlabel('z (m)')
-        
-        img = ax2.pcolormesh(self.x_p, self.y_p, self.h0, vmin=-0.5, vmax=0.5, cmap=cmap)
-        if self.use_nest:
-            roi = patches.Rectangle((self.roi[0], self.roi[1]), self.roi[2], self.roi[3], linewidth=1, edgecolor='r', facecolor='none')
-            ax2.add_patch(roi)
-        ax2.set_xlabel('x (km)')
-        ax2.set_ylabel('y (km)')
-        ax2.set_aspect(1)
-        
-        if self.use_nest:
-            ax3 = fig.add_subplot(2, 2, 3, projection='3d')
-            ax4 = fig.add_subplot(2, 2, 4)
-            ax3.plot_surface(self.xnm/1000, self.ynm/1000, self.h_0, cmap=cmap, edgecolor='none', antialiased=True, vmin=-0.5, vmax=0.5)
-            ax3.set_xlabel('x (km)')
-            ax3.set_ylabel('y (km)')
-            ax3.set_zlabel('z (m)')
-            
-            ax4.pcolormesh(self.xnm/1000, self.ynm/1000, self.h_0, vmin=-0.5, vmax=0.5, cmap=cmap)
-            ax4.set_xlabel('x (km)')
-            ax4.set_ylabel('y (km)')
-            ax4.set_aspect(1)
-        
-        fig.subplots_adjust(right=0.8)
-        cbar_ax = fig.add_axes([0.85, 0.15, 0.025, 0.7])
-        fig.colorbar(img, cax=cbar_ax, label='$h$ (m)')
-        plt.savefig(F'{self.path}/{0:06d}.jpg', bbox_inches='tight', pad_inches=0.1)
-        plt.cla()
-        plt.clf()
-        plt.close(fig)
     
     def forward_difference(self):
         self.u1[:,1:-1] = self.u0[:,1:-1] -  self.gravity * self.DT/self.DX * (self.h0[:,1:] - self.h0[:,:-1]) + self.f * self.DT * (self.v1[1:,1:] + self.v1[1:,:-1] + self.v1[:-1,1:] + self.v1[:-1,:-1])/4
         self.v1[1:-1,:] = self.v0[1:-1,:] -  self.gravity * self.DT/self.DY * (self.h0[1:,:] - self.h0[:-1,:]) - self.f * self.DT * (self.u1[1:,1:] + self.u1[:-1,1:] + self.u1[1:,:-1] + self.u1[:-1,:-1])/4
-        self.h1[1:-1, 1:-1] = self.h0[1:-1,1:-1] - self.H[1:-1,1:-1] * (self.DT/self.DX * (self.u0[1:-1,2:-1] - self.u0[1:-1,1:-2]) + self.DT/self.DY * (self.v0[2:-1,1:-1] - self.v0[1:-2,1:-1]))
-        
+        self.h1[1:-1, 1:-1] = self.h0[1:-1,1:-1] - self.H[1:-1,1:-1] * (self.DT/self.DX * (self.u0[1:-1,2:-1] - self.u0[1:-1,1:-2]) + self.DT/self.DY * (self.v0[2:-1,1:-1] - self.v0[1:-2,1:-1]))   
         
     def centered_differences(self):
         self.u2[:,1:-1] = self.u0[:,1:-1] - 2 * self.gravity * self.DT/self.DX * (self.h1[:,1:] - self.h1[:,:-1]) + self.f * self.DT * (self.v1[1:,1:] + self.v1[1:,:-1] + self.v1[:-1,1:] + self.v1[:-1,:-1])/2
@@ -224,89 +195,98 @@ class simple2dmodel:
         self.yn = np.linspace(self.H2.y[self.y0nest], self.H2.y[self.y1nest], self.Yn)
 
         self.H2 = self.H2.interp(x=self.xn, y=self.yn)
-        
-
-    def interp_nesting(self):       
-        self.h_0 = xr.DataArray(self.h0, dims=['y', 'x'], coords={'x':(('x'), np.arange(self.X)*self.DX),
-                                                                  'y':(('y'), np.arange(self.Y)*self.DY)})
-        self.u_0 = xr.DataArray(self.u0, dims=['y', 'x'], coords={'x':(('x'), np.arange(-0.5,self.X+0.5)*self.DX),
-                                                                  'y':(('y'), np.arange(self.Y)*self.DY)})
-        self.v_0 = xr.DataArray(self.v0, dims=['y', 'x'], coords={'x':(('x'), np.arange(self.X)*self.DX),
-                                                                  'y':(('y'), np.arange(-0.5,self.Y+0.5)*self.DY)})
-        
-        self.h_1 = xr.DataArray(self.h1, dims=['y', 'x'], coords={'x':(('x'), np.arange(self.X)*self.DX),
-                                                                  'y':(('y'), np.arange(self.Y)*self.DY)})
-        self.u_1 = xr.DataArray(self.u1, dims=['y', 'x'], coords={'x':(('x'), np.arange(-0.5,self.X+0.5)*self.DX),
-                                                                  'y':(('y'), np.arange(self.Y)*self.DY)})
-        self.v_1 = xr.DataArray(self.v1, dims=['y', 'x'], coords={'x':(('x'), np.arange(self.X)*self.DX),
-                                                                  'y':(('y'), np.arange(-0.5,self.Y+0.5)*self.DY)})
-        
-        self.h_2 = xr.DataArray(self.h2, dims=['y', 'x'], coords={'x':(('x'), np.arange(self.X)*self.DX),
-                                                                  'y':(('y'), np.arange(self.Y)*self.DY)})
-        self.u_2 = xr.DataArray(self.u2, dims=['y', 'x'], coords={'x':(('x'), np.arange(-0.5,self.X+0.5)*self.DX),
-                                                                  'y':(('y'), np.arange(self.Y)*self.DY)})
-        self.v_2 = xr.DataArray(self.v2, dims=['y', 'x'], coords={'x':(('x'), np.arange(self.X)*self.DX),
-                                                                  'y':(('y'), np.arange(-0.5,self.Y+0.5)*self.DY)})
-        
-        self.h_0 = self.h_0.interp(x=np.linspace(self.h_0.x[self.x0nest], self.h_0.x[self.x1nest], self.Xn),
-                                   y=np.linspace(self.h_0.y[self.y0nest], self.h_0.y[self.y1nest], self.Yn)).data
-        self.u_0 = self.u_0.interp(x=np.linspace(self.u_0.x[self.x0nest], self.u_0.x[self.x1nest], self.Xn+1), 
-                                   y=np.linspace(self.u_0.y[self.y0nest], self.u_0.y[self.y1nest], self.Yn)).data
-        self.v_0 = self.v_0.interp(x=np.linspace(self.v_0.x[self.x0nest], self.v_0.x[self.x1nest], self.Xn), 
-                                   y=np.linspace(self.v_0.y[self.x0nest], self.v_0.y[self.y1nest], self.Yn+1)).data
-        
-        self.h_1 = self.h_1.interp(x=np.linspace(self.h_1.x[self.x0nest], self.h_1.x[self.x1nest], self.Xn), 
-                                   y=np.linspace(self.h_1.y[self.y0nest], self.h_1.y[self.y1nest], self.Yn)).data
-        self.u_1 = self.u_1.interp(x=np.linspace(self.u_1.x[self.x0nest], self.u_1.x[self.x1nest], self.Xn+1), 
-                                   y=np.linspace(self.u_1.y[self.y0nest], self.u_1.y[self.y1nest], self.Yn)).data
-        self.v_1 = self.v_1.interp(x=np.linspace(self.v_1.x[self.x0nest], self.v_1.x[self.x1nest], self.Xn), 
-                                   y=np.linspace(self.v_1.y[self.y0nest], self.v_1.y[self.y1nest], self.Yn+1)).data
-
-        self.h_2 = self.h_2.interp(x=np.linspace(self.h_2.x[self.x0nest], self.h_2.x[self.x1nest], self.Xn), 
-                                   y=np.linspace(self.h_2.y[self.y0nest], self.h_2.y[self.y1nest], self.Yn)).data
-        self.u_2 = self.u_2.interp(x=np.linspace(self.u_2.x[self.x0nest], self.u_2.x[self.x1nest], self.Xn+1), 
-                                   y=np.linspace(self.u_2.y[self.y0nest], self.u_2.y[self.y1nest], self.Yn)).data
-        self.v_2 = self.v_2.interp(x=np.linspace(self.v_2.x[self.x0nest], self.v_2.x[self.x1nest], self.Xn), 
-                                   y=np.linspace(self.v_2.y[self.y0nest], self.v_2.y[self.y1nest], self.Yn+1)).data
     
-    def save_figures(self, tt, cmap='viridis'):
+    def interp_ic(self):
+        h = xr.DataArray(self.h1, dims=['y','x'], coords={'x':(('x'), self.xh_xa),
+                                                          'y':(('y'), self.yh_xa)})
+        u = xr.DataArray(self.u1, dims=['y','x'], coords={'x':(('x'), self.xu_xa),
+                                                          'y':(('y'), self.yh_xa)})
+        v = xr.DataArray(self.v1, dims=['y','x'], coords={'x':(('x'), self.xh_xa),
+                                                          'y':(('y'), self.yv_xa)})
+        self.u_0 = u.interp(x=self.xu_tg, y=self.yh_tg).data.copy()
+        self.v_0 = v.interp(x=self.xh_tg, y=self.yv_tg).data.copy()
+        self.h_0 = h.interp(x=self.xh_tg, y=self.yh_tg).data.copy()
+    
+    def interpn_nesting(self):
+        h1 = np.stack([self.h0, self.h1], axis=-1)
+        h2 = np.stack([self.h1, self.h2], axis=-1)
+        u1 = np.stack([self.u0, self.u1], axis=-1)
+        u2 = np.stack([self.u1, self.u2], axis=-1)
+        v1 = np.stack([self.v0, self.v1], axis=-1)
+        v2 = np.stack([self.v1, self.v2], axis=-1)
         
+        self.hxr = xr.Dataset(
+            data_vars=dict(h1=(('y','x','t'), h1), h2=(('y','x','t'), h2)),
+            coords={'x':(('x'), self.xh_xa), 
+                    'y':(('y'), self.yh_xa),
+                    't':(('t'), self.t0)})
+        self.uxr = xr.Dataset(
+            data_vars=dict(u1=(('y','x','t'), u1), u2=(('y','x','t'), u2)),
+            coords={'x':(('x'), self.xu_xa), 
+                    'y':(('y'), self.yh_xa),
+                    't':(('t'), self.t0)})
+        self.vxr = xr.Dataset(
+            data_vars=dict(v1=(('y','x','t'), v1), v2=(('y','x','t'), v2)),
+            coords={'x':(('x'), self.xh_xa), 
+                    'y':(('y'), self.yv_xa),
+                    't':(('t'), self.t0)})
+               
+        self.hxr = self.hxr.interp(x=self.xh_tg, y=self.yh_tg, t=self.tt_tg)
+        self.uxr = self.uxr.interp(x=self.xu_tg, y=self.yh_tg, t=self.tt_tg)
+        self.vxr = self.vxr.interp(x=self.xh_tg, y=self.yv_tg, t=self.tt_tg)
+
+    def save_figures(self, tt, cmap='viridis'): 
         fig = plt.figure(figsize=(13,6), dpi=300)
         fig.suptitle(F'CFL:{self.CFL:06f}, timestep:{tt}', fontsize=16)
         if self.use_nest:
             ax1 = fig.add_subplot(2, 2, 1, projection='3d')
             ax2 = fig.add_subplot(2, 2, 2)
+            ax3 = fig.add_subplot(2, 2, 3, projection='3d')
+            ax4 = fig.add_subplot(2, 2, 4)
+            roi = patches.Rectangle((self.roi[0], self.roi[1]), self.roi[2], self.roi[3], 
+                                    linewidth=1, edgecolor='r', facecolor='none', zorder=100)
+            ax2.add_patch(roi)
+            
+            ax3.set_xlabel('y (km)')
+            ax3.set_ylabel('x (km)')
+            ax3.set_zlabel('z (m)')
+            ax4.set_xlabel('y (km)')
+            ax4.set_ylabel('x (km)')
         else:
             ax1 = fig.add_subplot(1, 2, 1, projection='3d')
             ax2 = fig.add_subplot(1, 2, 2)
         
-        ax1.plot_surface(self.x_p, self.y_p, self.h2, cmap=cmap, edgecolor='none', antialiased=True, vmin=-0.5, vmax=0.5)
-        ax1.set_xlabel('x (km)')
-        ax1.set_ylabel('y (km)')
+        if tt == 0:
+            ax1.plot_surface(self.x_p[1:-1,1:-1], self.y_p[1:-1,1:-1], self.h1[1:-1,1:-1], 
+                             cmap=cmap, edgecolor='none', antialiased=True, vmin=-0.5, vmax=0.5)
+            img = ax2.pcolormesh(self.x_p, self.y_p, self.h1, 
+                                 vmin=-0.5, vmax=0.5, cmap=cmap)
+            if self.use_nest:
+                ax4.pcolormesh(self.xnm/1000, self.ynm/1000, self.h_1, 
+                               vmin=-0.5, vmax=0.5, cmap=cmap)
+                ax3.plot_surface(self.xnm/1000, self.ynm/1000, self.h_1, 
+                                 cmap=cmap, edgecolor='none', antialiased=True, vmin=-0.5, vmax=0.5)
+                ax4.set_aspect(1)
+        else:
+            ax1.plot_surface(self.x_p[1:-1,1:-1], self.y_p[1:-1,1:-1], self.h2[1:-1,1:-1], 
+                             cmap=cmap, edgecolor='none', antialiased=True, vmin=-0.5, vmax=0.5)
+            img = ax2.pcolormesh(self.x_p, self.y_p, self.h2, 
+                                 vmin=-0.5, vmax=0.5, cmap=cmap)
+            if self.use_nest:
+                ax4.pcolormesh(self.xnm/1000, self.ynm/1000, self.h_2, 
+                               vmin=-0.5, vmax=0.5, cmap=cmap)
+                ax3.plot_surface(self.xnm/1000, self.ynm/1000, self.h_2, 
+                                 cmap=cmap, edgecolor='none', antialiased=True, vmin=-0.5, vmax=0.5)
+                ax4.set_aspect(1)
+            
+            
+        ax2.set_aspect(1)        
+        ax1.set_xlabel('y (km)')
+        ax1.set_ylabel('x (km)')
         ax1.set_zlabel('z (m)')
-        
-        img = ax2.pcolormesh(self.x_p, self.y_p, self.h2, vmin=-0.5, vmax=0.5, cmap=cmap)
-        if self.use_nest:
-            roi = patches.Rectangle((self.roi[0], self.roi[1]), self.roi[2], self.roi[3], linewidth=1, edgecolor='r', facecolor='none')
-            ax2.add_patch(roi)
-        ax2.set_xlabel('x (km)')
-        ax2.set_ylabel('y (km)')
-        ax2.set_aspect(1)
-        
-        if self.use_nest:
-            ax3 = fig.add_subplot(2, 2, 3, projection='3d')
-            ax4 = fig.add_subplot(2, 2, 4)
-            
-            ax3.plot_surface(self.xnm/1000, self.ynm/1000, self.h_2, cmap=cmap, edgecolor='none', antialiased=True, vmin=-0.5, vmax=0.5)
-            ax3.set_xlabel('x (km)')
-            ax3.set_ylabel('y (km)')
-            ax3.set_zlabel('z (m)')
-            
-            ax4.pcolormesh(self.xnm/1000, self.ynm/1000, self.h_2, vmin=-0.5, vmax=0.5, cmap=cmap)
-            ax4.set_xlabel('x (km)')
-            ax4.set_ylabel('y (km)')
-            ax4.set_aspect(1)
-        
+        ax2.set_xlabel('y (km)')
+        ax2.set_ylabel('x (km)')
+          
         fig.subplots_adjust(right=0.8)
         cbar_ax = fig.add_axes([0.85, 0.15, 0.025, 0.7])
         fig.colorbar(img, cax=cbar_ax, label='$h$ (m)')
@@ -338,7 +318,7 @@ class simple2dmodel:
        self.u1[:,-2] = 0
        self.v1[1,:]  = 0
        self.v1[-2,:] = 0
-    
+       
     def plot_speed(self,tt):
         fig, ((ax1,ax2),(ax3,ax4)) = plt.subplots(2,2,figsize=(12,6), dpi=300)
         pc1 = ax1.pcolormesh(self.h2, vmin=-0.5, vmax=0.5, cmap='PRGn')
@@ -386,6 +366,27 @@ class simple2dmodel:
         
     def calc_volume(self, ii):
         self.vol[ii] = np.nansum(np.abs(self.h2)[1:-1, 1:-1]) * self.DX * self.DY
+        
+    def run_nesting(self):
+        self.interpn_nesting()
+        
+        for tt in range(self.nest_ratio):
+            self.u_1 = self.uxr.u1.data[... , tt] * self.umask + (1-self.umask) * self.u_1
+            self.v_1 = self.vxr.v1.data[... , tt] * self.vmask + (1-self.vmask) * self.v_1
+            self.h_1 = self.hxr.h1.data[... , tt] * self.hmask + (1-self.hmask) * self.h_1
+            
+            self.u_2 = self.uxr.u2.data[... , tt] * self.umask + (1-self.umask) * self.u_2
+            self.v_2 = self.vxr.v2.data[... , tt] * self.vmask + (1-self.vmask) * self.v_2
+            self.h_2 = self.hxr.h2.data[... , tt] * self.hmask + (1-self.hmask) * self.h_2
+            
+            self.centered_differences_nest()
+            
+            self.u_0 = self.u_1.copy()
+            self.v_0 = self.v_1.copy()
+            self.h_0 = self.h_1.copy()
+            self.u_1 = self.u_2.copy()
+            self.v_1 = self.v_2.copy()
+            self.h_1 = self.h_2.copy()
     
     def run(self, cmap:str='viridis'):
         self.check_dir()
@@ -409,15 +410,11 @@ class simple2dmodel:
                 self.forward_difference()
                 
                 if self.use_nest:
-                    self.interp_nesting()
-                    
-                if self.plotting:
-                    self.plot_initialcondition(cmap=cmap)
+                    self.interp_ic()
                     
             else:
                 if self.use_nest:
-                    self.interp_nesting()
-                    self.centered_differences_nest()
+                    self.run_nesting()
                 
                 self.centered_differences()
                 
@@ -432,7 +429,7 @@ class simple2dmodel:
                 self.get_potential_energy(tt)
                 self.calc_volume(tt)
             
-            if self.plotting and tt%self.plot_interval == 0 and tt!=0:
+            if self.plotting and tt%self.plot_interval == 0:
                 self.save_figures(tt, cmap)
                 # self.plot_speed(tt)
 
@@ -756,14 +753,14 @@ class channel2dmodel:
             img = ax2.pcolormesh(self.y_p.T, self.x_p.T,self.h1.T, vmin=-1, vmax=1, cmap=cmap)
             if self.use_nest:
                 ax4.pcolormesh(self.ynm.T/1000, self.xnm.T/1000, self.h_1.T, vmin=-1, vmax=1, cmap=cmap)
-                ax3.plot_surface(self.xnm/1000, self.ynm/1000, self.h_1, cmap=cmap, edgecolor='none', antialiased=True, vmin=-0.5, vmax=0.5)
+                ax3.plot_surface(self.xnm/1000, self.ynm/1000, self.h_1, cmap=cmap, edgecolor='none', antialiased=True, vmin=-1, vmax=1)
                 ax4.set_aspect(1)
         else:
             ax1.plot_surface(self.y_p[1:-1,1:-1].T, self.x_p[1:-1,1:-1].T, self.h2[1:-1,1:-1].T, cmap=cmap, edgecolor='none', antialiased=True, vmin=-1, vmax=1)
             img = ax2.pcolormesh(self.h2.T, vmin=-1, vmax=1, cmap=cmap)
             if self.use_nest:
                 ax4.pcolormesh(self.ynm.T/1000, self.xnm.T/1000, self.h_2.T, vmin=-1, vmax=1, cmap=cmap)
-                ax3.plot_surface(self.ynm.T/1000, self.xnm.T/1000, self.h_2.T, cmap=cmap, edgecolor='none', antialiased=True, vmin=-0.5, vmax=0.5)
+                ax3.plot_surface(self.ynm.T/1000, self.xnm.T/1000, self.h_2.T, cmap=cmap, edgecolor='none', antialiased=True, vmin=-1, vmax=1)
                 ax4.set_aspect(1)
                          
         ax2.set_aspect(1)        
@@ -772,7 +769,6 @@ class channel2dmodel:
         ax1.set_zlabel('z (m)')
         ax2.set_xlabel('y (km)')
         ax2.set_ylabel('x (km)')
-        
         
         fig.subplots_adjust(right=0.8)
         cbar_ax = fig.add_axes([0.85, 0.15, 0.025, 0.7])

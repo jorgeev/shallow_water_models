@@ -10,11 +10,11 @@ from myfirstshallowwatermodel.model2d import simple2dmodel as sw2d
 #from myfirstshallowwatermodel.model2d import channel2dmodel as sw2d
 import matplotlib.pyplot as plt
 
-model2 = sw2d(X=300, Y=200, H_0=1500, nt=10000, nesting=False, DT=1, 
+model2 = sw2d(X=300, Y=200, H_0=1500, nt=2500, nesting=True, DT=1, nest_ratio=3,
               omega=7.29E-5, origin=(150,100), initialc='e', use_asselin=True,
               asselin_value=0.1, asselin_step=1, calculate_metrics=True,
-              DX=1000, DY=1000, nestpos=(50,100,30,50), plotting=True, # use_asselin=True,
-              plot_interval=1000, size=(4,4), maxh0=1.)
+              DX=1000, DY=1000, nestpos=(50,100,30,50), plotting=True, plot_path='nest3',
+              plot_interval=50, size=(4,4), maxh0=1.)
 
 model2.run(cmap='PRGn')#cmap='twilight_shifted')
 
