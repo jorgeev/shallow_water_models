@@ -12,7 +12,7 @@ model2 = sw2d(X=200, Y=400, H_0=2500, nt=5000, nesting=True, DT=1,
               omega=20*7.29E-5, use_asselin=False, period=500,
               asselin_value=0.1, asselin_step=1, calculate_metrics=True,
               DX=1000, DY=1000, nestpos=(140,100,55,200), plotting=True, 
-              nest_ratio=5,
+              nest_ratio=3,
               plot_interval=50)
 
 model2.run(cmap='twilight_shifted')

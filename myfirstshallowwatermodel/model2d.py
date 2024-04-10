@@ -672,7 +672,6 @@ class channel2dmodel:
             self.u_1 = self.u_2.copy()
             self.v_1 = self.v_2.copy()
             self.h_1 = self.h_2.copy()
-            
     
     def apply_asselin(self):
         self.u1 += self.asselin_coef * (self.u0 - 2*self.u1 + self.u2)
@@ -778,7 +777,6 @@ class channel2dmodel:
         fig.subplots_adjust(right=0.8)
         cbar_ax = fig.add_axes([0.85, 0.15, 0.025, 0.7])
         fig.colorbar(img, cax=cbar_ax, label='$h$ (m)')
-        #plt.show()
         plt.savefig(F'{self.path}/{tt:06d}.jpg', bbox_inches='tight', pad_inches=0.1)
         plt.cla()
         plt.clf()
@@ -806,13 +804,10 @@ class channel2dmodel:
                 
                 if self.use_nest:
                     self.interp_ic()
-                    #self.interp_nesting()
                     
             else:
                 if self.use_nest:
                     self.run_nesting()
-                    #self.interp_nesting()
-                    #self.centered_differences_nest()
                 
                 self.centered_differences()
                 
