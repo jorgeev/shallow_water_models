@@ -10,7 +10,7 @@ from os.path import isdir
 import numpy as np
 import matplotlib.pyplot as plt
 
-class swallow1D:
+class simple1D:
 
     def __init__(self, X:int=150, DX:float=1000, DT:float=3, nt:int=3000, H_0:float=1500, 
                  period:float=450, gravity:float=9.81, boundary:str="p", 
@@ -119,14 +119,16 @@ class swallow1D:
         ax1.set_xlim(0,self.X)
         ax1.set_ylim(-1.5,1.5)
         ax2.set_ylim(-0.20,0.20)
+        ax1.grid()
+        ax2.grid()
         plt.savefig(F'{self.path}/{tt:06d}.jpg', bbox_inches='tight', pad_inches=0.1)
         plt.cla()
         plt.clf()
         plt.close(fig)
 
         
-    def run_model(self):
-        fig, (ax1,ax2)= plt.subplots(2,1,figsize=(6,4),sharex=True)
+    def run(self):
+        self.check_dir()
         for tt in range(self.nt):
             self.apply_boundary_conditions(tt)
             if tt == 0:
@@ -146,5 +148,5 @@ class swallow1D:
             self.get_potential_energy(tt)
             self.calc_volume(tt)
             
-            if tt!=0 and self.plotting:
+            if tt!=0 and self.plotting and tt%self.plot_interval==0:
                 self.save_figures(tt)

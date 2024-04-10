@@ -16,7 +16,7 @@ model2 = sw2d(X=300, Y=200, H_0=1500, nt=2500, nesting=True, DT=1, nest_ratio=3,
               DX=1000, DY=1000, nestpos=(50,100,30,50), plotting=True, plot_path='nest3',
               plot_interval=50, size=(4,4), maxh0=1.)
 
-model2.run(cmap='PRGn')#cmap='twilight_shifted')
+model2.run(cmap='twilight_shifted')
 
 
 fig, ax = plt.subplots(4,1,figsize=(12,6), dpi=300, sharex=True)
