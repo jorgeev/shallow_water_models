@@ -506,17 +506,29 @@ class channel2dmodel:
         
         #for nested data
         if self.use_nest:
+            self.nest_ratio = nest_ratio
             self.roi = nestpos
             self.dampening = dampening
-            self.Xn = nestpos[2] * nest_ratio + 1 
-            self.Yn = nestpos[3] * nest_ratio + 1 
-            self.DTn = self.DT / nest_ratio
-            self.DXn = self.DX / nest_ratio
-            self.DYn = self.DY / nest_ratio
+            self.Xn = nestpos[2] * self.nest_ratio + 1 
+            self.Yn = nestpos[3] * self.nest_ratio + 1 
+            self.DTn = self.DT / self.nest_ratio
+            self.DXn = self.DX / self.nest_ratio
+            self.DYn = self.DY / self.nest_ratio
             self.x0nest = nestpos[0]
             self.x1nest = nestpos[0] + nestpos[2] + 1
             self.y0nest = nestpos[1]
             self.y1nest = nestpos[1] + nestpos[3] + 1
+            # Parametros para la interpolacion de dominios
+            self.xh_xa = np.arange(self.X)
+            self.yh_xa = np.arange(self.Y)
+            self.xu_xa = np.arange(-0.5,self.X+0.5)*self.DX
+            self.yv_xa = np.arange(-0.5,self.Y+0.5)*self.DY
+            self.t0 = np.arange(3, )        
+            self.xh_tg = np.linspace(self.xh_xa[self.x0nest], self.xh_xa[self.x1nest], self.Xn)
+            self.yh_tg = np.linspace(self.yh_xa[self.y0nest], self.yh_xa[self.y1nest], self.Yn)
+            self.xu_tg = np.linspace(self.xu_xa[self.x0nest], self.xu_xa[self.x1nest], self.Xn+1)
+            self.yv_tg = np.linspace(self.yv_xa[self.y0nest], self.yv_xa[self.y1nest], self.Yn+1)
+            self.tt_tg = np.linspace(0, 2, 1+2*self.nest_ratio)
             
     def check_dir(self):
         if isdir(self.path) == False:
@@ -637,6 +649,27 @@ class channel2dmodel:
                                    y=np.linspace(self.u_2.y[self.y0nest], self.u_2.y[self.y1nest], self.Yn)).data
         self.v_2 = self.v_2.interp(x=np.linspace(self.v_2.x[self.x0nest], self.v_2.x[self.x1nest], self.Xn), 
                                    y=np.linspace(self.v_2.y[self.y0nest], self.v_2.y[self.y1nest], self.Yn+1)).data
+        
+    def interpn_nesting(self):
+        h = np.stack([self.h0, self.h1, self.h2], axis=-1)
+        u = np.stack([self.u0, self.u1, self.u2], axis=-1)
+        v = np.stack([self.v0, self.v1, self.v2], axis=-1)
+        
+        
+        self.hxr = xr.DataArray(h, dims=['y','x', 't'], coords={'x':(('x'), self.xh_xa),
+                                                                'y':(('y'), self.yh_xa),
+                                                                't':(('t'), self.t0)})
+        self.uxr = xr.DataArray(u, dims=['y','x', 't'], coords={'x':(('x'), self.xu_xa),
+                                                                'y':(('y'), self.yh_xa),
+                                                                't':(('t'), self.t0)})
+        self.vxr = xr.DataArray(v, dims=['y','x', 't'], coords={'x':(('x'), self.xh_xa),
+                                                                'y':(('y'), self.yv_xa),
+                                                                't':(('t'), self.t0)})
+        
+        self.hxr = self.hxr.interp(x=self.xh_tg, y=self.yh_tg, t=self.tt_tg)
+        self.uxr = self.uxr.interp(x=self.xu_tg, y=self.yh_tg, t=self.tt_tg)
+        self.vxr = self.vxr.interp(x=self.xh_tg, y=self.yv_tg, t=self.tt_tg)
+        
     
     def apply_asselin(self):
         self.u1 += self.asselin_coef * (self.u0 - 2*self.u1 + self.u2)
