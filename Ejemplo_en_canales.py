@@ -9,9 +9,9 @@ from myfirstshallowwatermodel.model2d import channel2dmodel as sw2d
 import matplotlib.pyplot as plt
 
 model2 = sw2d(X=200, Y=400, H_0=2500, nt=5000, nesting=True, DT=1, 
-              omega=20*7.29E-5, use_asselin=True, period=500,
+              omega=20*7.29E-5, use_asselin=False, period=500,
               asselin_value=0.1, asselin_step=1, calculate_metrics=True,
-              DX=1000, DY=1000, nestpos=(140,200,55,50), plotting=True, 
+              DX=1000, DY=1000, nestpos=(140,100,55,200), plotting=True, 
               nest_ratio=5,
               plot_interval=50)
 
@@ -28,6 +28,6 @@ ax[3].grid()
 ax[0].grid()
 plt.show()
 
-fig, ax = plt.subplots(1,1,figsize=(12,6), dpi=300)
-ax.plot((model2.E_p + model2.E_k)[1500:])
-plt.show()
+#fig, ax = plt.subplots(1,1,figsize=(12,6), dpi=300)
+#ax.plot((model2.E_p + model2.E_k)[1500:])
+#plt.show()
