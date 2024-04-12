@@ -23,9 +23,26 @@ fig, ax = plt.subplots(1,1,figsize=(6,8),sharex=True, dpi=300)
 ax.plot(model.h_output.T)
 plt.show()
 
+H_outputs = np.flipud(model.h_output[1:].T)
+H_mean = np.mean(H_outputs, axis=0)
+H_std = np.std(H_outputs, axis=0)
 fig, ax = plt.subplots(1,1,figsize=(6,8),sharex=True, dpi=300)
-ax.pcolormesh(np.flipud(model.h_output.T))
+ax.pcolormesh(H_outputs)
 plt.show()
+
+H_norm = (H_outputs - H_mean)/H_std
+C = 1/4 * np.matmul(H_norm[:,1:], H_norm[:,1:].T)
+H_norm[:,0] = 0
+fig, ax = plt.subplots(1,1,figsize=(6,8),sharex=True, dpi=300)
+ax.pcolormesh(H_norm)
+plt.show()
+
+
+fig, ax = plt.subplots(1,1,figsize=(6,8),sharex=True, dpi=300)
+ax.pcolormesh(C)
+plt.show()
+
+eigenvalues, eigenvectors = np.linalg.eig(C)
 
 fig, ax = plt.subplots(4,1,figsize=(6,8),sharex=True, dpi=300)
 fig.suptitle('Métricas', fontsize=16)
