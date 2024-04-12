@@ -16,6 +16,7 @@ class simple1D:
                  period:float=450, gravity:float=9.81, boundary:str="p", 
                  use_asselin:bool=False, asselin_value:float=0.1, asselin_step:int=1,
                  plotting:bool=False, plot_path:str='1D_output', plot_interval:int=100,
+                 save_outputs:bool=False, save_interval:int=100,
                  ):
         """
         X       : mesh size
@@ -30,7 +31,7 @@ class simple1D:
         self.X = X
         self.DX = DX
         self.DT = DT
-        self.nt = nt
+        self.nt = nt+1
         self.period = period
         self.gravity = gravity
         self.v1 = gravity * DT / DX
@@ -44,19 +45,24 @@ class simple1D:
         self.u0 = np.zeros(X+1)
         self.u1 = np.zeros(X+1)
         self.u2 = np.zeros(X+1)
-        self.E_k = np.zeros(nt)
-        self.E_p = np.zeros(nt)
-        self.vol = np.zeros(nt)
+        self.E_k = np.zeros(self.nt)
+        self.E_p = np.zeros(self.nt)
+        self.vol = np.zeros(self.nt)
         self.boundary = boundary
         
         # Asselin parameters
         self.asselin = use_asselin
         self.asselin_coef = asselin_value
         self.asselin_step = asselin_step
-        # plotting parameters
+        # Plotting parameters
         self.plotting = plotting
         self.path = plot_path
         self.plot_interval = plot_interval
+        # Save outputs
+        self.save_outputs = save_outputs
+        self.save_interval = save_interval
+        self.u_output = np.zeros([int(self.nt/self.save_interval)+1, self.X+1])
+        self.h_output = np.zeros([int(self.nt/self.save_interval)+1, self.X])
         
     def check_dir(self):
         if isdir(self.path) == False:
@@ -129,6 +135,7 @@ class simple1D:
         
     def run(self):
         self.check_dir()
+        self.outputs=0
         for tt in range(self.nt):
             self.apply_boundary_conditions(tt)
             if tt == 0:
@@ -150,3 +157,8 @@ class simple1D:
             
             if tt!=0 and self.plotting and tt%self.plot_interval==0:
                 self.save_figures(tt)
+                
+            if self.save_outputs and tt%self.save_interval==0:
+                self.u_output[self.outputs, :] = self.u2.copy()
+                self.h_output[self.outputs, :] = self.h2.copy()
+                self.outputs+=1
