@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Swallow water model in 2D with support to host a nesting inside the domain
-version 2024.04.08T23
+version 2024.04.24T09
 author jorgeev@github.com
 """
 
@@ -27,7 +27,8 @@ class simple2dmodel:
                  calculate_metrics:bool=False,
                  nestpos:tuple=(150,150,30,30), # tuple(x_origin, y_origin, width, height)
                  dampening:int=10, plotting:bool=False, plot_path='sim_output', plot_interval:int=100,
-                 origin:tuple=(100,100), size:tuple=(2,2), maxh0:float=1.):
+                 origin:tuple=(100,100), size:tuple=(2,2), maxh0:float=1.,
+                 save_outputs:bool=False, save_interval:int = 500):
         """
         X, Y    : mesh size
         DX, DY  : mesh spacing [m]
@@ -86,6 +87,14 @@ class simple2dmodel:
             self.E_k = np.zeros(nt)
             self.E_p = np.zeros(nt)
             self.vol = np.zeros(nt)
+            
+        # to save outputs
+        self.save_outputs = save_outputs
+        if self.save_outputs:
+            self.save_interval = save_interval
+            self.u_output = np.zeros([int(self.nt/self.save_interval)+1, self.Y, self.X+1])
+            self.v_output = np.zeros([int(self.nt/self.save_interval)+1, self.Y+1, self.X])
+            self.h_output = np.zeros([int(self.nt/self.save_interval)+1, self.Y, self.X])
         
         # for nested data
         if self.use_nest:
@@ -119,6 +128,7 @@ class simple2dmodel:
             self.xu_tg = np.linspace(self.xu_xa[self.x0nest], self.xu_xa[self.x1nest], self.Xn+1)
             self.yv_tg = np.linspace(self.yv_xa[self.y0nest], self.yv_xa[self.y1nest], self.Yn+1)
             self.tt_tg = np.linspace(0, 1, self.nest_ratio)
+            # need to add seving outpust in nesting
             
     def check_dir(self):
         if isdir(self.path) == False:
@@ -389,7 +399,9 @@ class simple2dmodel:
             self.h_1 = self.h_2.copy()
     
     def run(self, cmap:str='viridis'):
-        self.check_dir()
+        if self.plotting:
+            self.check_dir()
+        self.outputs=0
         if self.condition == 'e':
             self.create_perturbation2()
         elif self.condition == 'c':
@@ -429,6 +441,12 @@ class simple2dmodel:
                 self.get_potential_energy(tt)
                 self.calc_volume(tt)
             
+            if self.save_outputs and tt%self.save_interval==0:
+                self.u_output[self.outputs, :] = self.u2.copy()
+                self.v_output[self.outputs, :] = self.v2.copy()
+                self.h_output[self.outputs, :] = self.h2.copy()
+                self.outputs+=1
+            
             if self.plotting and tt%self.plot_interval == 0:
                 self.save_figures(tt, cmap)
                 # self.plot_speed(tt)
@@ -446,7 +464,8 @@ class channel2dmodel:
                  calculate_metrics:bool=False,
                  nestpos:tuple=(150,150,30,30), # tuple(x_origin, y_origin, width, height)
                  dampening:int=10, plotting:bool=False, plot_path='sim_output', 
-                 plot_interval:int=100):
+                 plot_interval:int=100,
+                 save_outputs:bool=False, save_interval:int = 500):
         """
         X, Y    : mesh size
         DX, DY  : mesh spacing [m]
@@ -501,6 +520,14 @@ class channel2dmodel:
             self.E_p = np.zeros(nt)
             self.vol = np.zeros(nt)
         
+        # to save outputs
+        self.save_outputs = save_outputs
+        if self.save_outputs:
+            self.save_interval = save_interval
+            self.u_output = np.zeros([int(self.nt/self.save_interval)+1, self.Y, self.X+1])
+            self.v_output = np.zeros([int(self.nt/self.save_interval)+1, self.Y+1, self.X])
+            self.h_output = np.zeros([int(self.nt/self.save_interval)+1, self.Y, self.X])
+            
         #for nested data
         if self.use_nest:
             self.nest_ratio = nest_ratio
@@ -782,7 +809,9 @@ class channel2dmodel:
     def run(self, cmap:str='viridis'):
         if self.plotting:
             self.check_dir()
-                
+            
+        self.outputs=0
+        
         if self.use_nest:
             self.create_masks()
             self.interp_topo()
@@ -817,6 +846,12 @@ class channel2dmodel:
                 self.get_potential_energy(tt)
                 self.calc_volume(tt)
             
+            if self.save_outputs and tt%self.save_interval==0:
+                self.u_output[self.outputs, :] = self.u2.copy()
+                self.v_output[self.outputs, :] = self.v2.copy()
+                self.h_output[self.outputs, :] = self.h2.copy()
+                self.outputs+=1
+            
             if self.plotting and tt%self.plot_interval == 0:
                 self.save_figures(tt, cmap)
-                self.plot_speed(tt)
+                # self.plot_speed(tt)
