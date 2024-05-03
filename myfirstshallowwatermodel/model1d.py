@@ -232,17 +232,19 @@ class windstress_1D:
                 self.u1[-1] = self.u1[1]
 
             if self.boundary == "c":
-                self.u1[-2] = 0
+                self.u1[-1] = 0
                 self.u1[0] = 0
-                self.u1[-3]*=0.1
-                self.u1[-4]*=0.2
-                self.u1[-5]*=0.3
-                self.u1[-6]*=0.4
-                self.u1[-7]*=0.5
-                self.u1[-8]*=0.6
-                self.u1[-9]*=0.7
-                self.u1[-10]*=0.8
-                self.u1[-11]*=0.9
+                self.u1[1] = 0
+                self.u1[-2]*=0.1
+                self.u1[-3]*=0.2
+                self.u1[-4]*=0.3
+                self.u1[-5]*=0.4
+                self.u1[-6]*=0.5
+                self.u1[-7]*=0.6
+                self.u1[-8]*=0.7
+                self.u1[-9]*=0.8
+                self.u1[-10]*=0.9
+                
                 
     
     def forward_differece(self):
