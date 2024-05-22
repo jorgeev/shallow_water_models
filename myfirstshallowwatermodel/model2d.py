@@ -13,6 +13,7 @@ import matplotlib.patches as patches
 from mpl_toolkits import mplot3d
 from os import mkdir
 from os.path import isdir
+from netCDF4 import Dataset
 
 class simple2dmodel:
     
