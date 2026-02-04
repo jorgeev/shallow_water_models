@@ -1,5 +1,6 @@
 *.pyc
 *.jpg
+*.png
 *__pychache__/
 .ipynb_checkpoints
 profile_default/
