@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Shallow water model in 2D with support for nesting inside the domain.
-version 2025.02.03T19
+version 2024.04.24T09
 author jorgeev@github.com
 
 Refactored: base class ShallowWaterModel2DBase, concrete models simple2dmodel,
@@ -86,6 +86,7 @@ class ShallowWaterModel2DBase:
         exp_name: str = "",
         save_outputs: bool = False,
         save_interval: int = 500,
+        boundary: str = "closed",
     ):
         self.use_nest = nesting
         self.X, self.DX = X, DX
@@ -94,6 +95,11 @@ class ShallowWaterModel2DBase:
         self.gravity = gravity
         self.H = _depth_to_H(H_0, Y, X)
         self.f = 2 * omega * np.sin(np.deg2rad(lat))
+
+        # Boundary conditions: 'closed' (impermeable walls) or 'periodic' (wrap-around)
+        self.boundary = str(boundary).lower().strip()
+        if self.boundary not in {"closed", "periodic"}:
+            raise ValueError("boundary must be 'closed' or 'periodic'")
 
         self.h0 = np.zeros((Y, X))
         self.h1 = np.zeros((Y, X))
@@ -105,7 +111,10 @@ class ShallowWaterModel2DBase:
         self.v1 = np.zeros((Y + 1, X))
         self.v2 = np.zeros((Y + 1, X))
 
-        self.CFL = np.sqrt(self.gravity * np.nanmax(self.H)) * self.DT / self.DX
+
+        c = np.sqrt(self.gravity * np.nanmax(self.H))
+        self.CFL = c * self.DT * np.sqrt(1/self.DX**2 + 1/self.DY**2)
+        #self.CFL = np.sqrt(self.gravity * np.nanmax(self.H)) * self.DT / self.DX
         self.Xv = np.arange(self.X)
         self.Yv = np.arange(self.Y)
         self.x_p, self.y_p = np.meshgrid(self.Xv, self.Yv)
@@ -175,12 +184,41 @@ class ShallowWaterModel2DBase:
         """Called at start of each time step (e.g. time-dependent forcing). Default: no-op."""
         pass
 
+    def _apply_closed_boundaries(self) -> None:
+        """Closed (impermeable) boundaries: zero normal flow on all edges."""
+        # u is normal to west/east boundaries
+        self.u1[:, 0] = 0.0
+        self.u1[:, -1] = 0.0
+        # v is normal to south/north boundaries
+        self.v1[0, :] = 0.0
+        self.v1[-1, :] = 0.0
+
+        self.u0[:, 0]  = self.u0[:, -1] = 0.0
+        self.v0[0, :]  = self.v0[-1, :] = 0.0
+
+
+    def _apply_periodic_boundaries(self) -> None:
+        """Periodic boundaries: wrap ghost edges to the opposite side."""
+        # Scalars (cell centers): treat index 0 and -1 as ghost rings
+        self.h1[:, 0] = self.h1[:, -2]
+        self.h1[:, -1] = self.h1[:, 1]
+        self.h1[0, :] = self.h1[-2, :]
+        self.h1[-1, :] = self.h1[1, :]
+
+        # u faces (x-direction): ghost faces at 0 and -1
+        self.u1[:, 0] = self.u1[:, -2]
+        self.u1[:, -1] = self.u1[:, 1]
+
+        # v faces (y-direction): ghost faces at 0 and -1
+        self.v1[0, :] = self.v1[-2, :]
+        self.v1[-1, :] = self.v1[1, :]
+
     def boundary_conditions(self, tt: int = 0) -> None:
-        """Apply boundary conditions to u1, v1, h1. Override in subclass."""
-        self.u1[:, 1] = 0
-        self.u1[:, -2] = 0
-        self.v1[1, :] = 0
-        self.v1[-2, :] = 0
+        """Apply boundary conditions to u1, v1, h1. Override in subclass if needed."""
+        if self.boundary == "closed":
+            self._apply_closed_boundaries()
+        elif self.boundary == "periodic":
+            self._apply_periodic_boundaries()
 
     def forward_difference(self) -> None:
         self.u1[:, 1:-1] = (
@@ -197,6 +235,7 @@ class ShallowWaterModel2DBase:
             self.DT / self.DX * (self.u0[1:-1, 2:-1] - self.u0[1:-1, 1:-2])
             + self.DT / self.DY * (self.v0[2:-1, 1:-1] - self.v0[1:-2, 1:-1])
         )
+
 
     def centered_differences(self) -> None:
         self.u2[:, 1:-1] = (
@@ -320,20 +359,6 @@ class ShallowWaterModel2DBase:
         else:
             self.u0, self.v0, self.h0 = self.u1.copy(), self.v1.copy(), self.h1.copy()
 
-        # --- momentum update ---
-        #self.u1[:, 1:-1] = self.u0[:, 1:-1] - self.DT * self.gravity * (self.h0[:, 1:] - self.h0[:, :-1]) / self.DX
-        #self.v1[1:-1, :] = self.v0[1:-1, :] - self.DT * self.gravity * (self.h0[1:, :] - self.h0[:-1, :]) / self.DY
-
-        # --- enforce closed (impermeable) boundaries ---
-        # zonal velocity (normal to west/east walls)
-        self.u1[:, 0]  = 0.0
-        self.u1[:, -1] = 0.0
-        self.u0[:, 0]  = self.u0[:, -1] = 0.0
-        self.v0[0, :]  = self.v0[-1, :] = 0.0
-        # meridional velocity (normal to south/north walls)
-        self.v1[0, :]  = 0.0
-        self.v1[-1, :] = 0.0
-
     def get_kinetic_energy(self, ii: int) -> None:
         self.E_k[ii] = (
             0.5
@@ -412,27 +437,39 @@ class ShallowWaterModel2DBase:
             self.boundary_conditions(tt)
             if tt == 0:
                 self.forward_difference()
-                if self.use_nest:
-                    self.interp_ic()
+                if self.save_outputs and tt % self.save_interval == 0:
+                    self.u_output[self.outputs] = self.u1.copy()
+                    self.v_output[self.outputs] = self.v1.copy()
+                    self.h_output[self.outputs] = self.h1.copy()
+                    self.outputs += 1
             else:
                 if self.use_nest:
                     self.run_nesting()
+                    self.h1[self.roi[1] : self.roi[1] + self.roi[3] + 1, self.roi[0] : self.roi[0] + self.roi[2] + 1] = (
+                        self.h_1[:: int(self.nest_ratio), :: int(self.nest_ratio)]
+                    )
+                    self.u1[self.roi[1] : self.roi[1] + self.roi[3] + 1, self.roi[0] : self.roi[0] + self.roi[2] + 2] = (
+                        self.u_1[:: int(self.nest_ratio), :: int(self.nest_ratio)]
+                    )
+                    self.v1[self.roi[1] : self.roi[1] + self.roi[3] + 2, self.roi[0] : self.roi[0] + self.roi[2] + 1] = (
+                        self.v_1[:: int(self.nest_ratio), :: int(self.nest_ratio)]
+                    )
                 self.centered_differences()
-            if self.asselin and tt % self.asselin_step == 0 and tt != 0:
-                self.apply_asselin()
-            self.update_uvh(tt)
-            if self.metrics:
-                self.get_kinetic_energy(tt)
-                self.get_potential_energy(tt)
-                self.calc_volume(tt)
-            if self.save_outputs and tt % self.save_interval == 0:
-                self.u_output[self.outputs, :] = self.u2.copy()
-                self.v_output[self.outputs, :] = self.v2.copy()
-                self.h_output[self.outputs, :] = self.h2.copy()
-                self.outputs += 1
-            if self.plotting and tt % self.plot_interval == 0:
-                self.save_figures(tt, cmap)
-                print(f"  Saved frame {tt:06d}.jpg")
+                if self.asselin and tt % self.asselin_step == 0:
+                    self.apply_asselin()
+                if self.metrics:
+                    self.get_kinetic_energy(tt)
+                    self.get_potential_energy(tt)
+                    self.calc_volume(tt)
+                if self.plotting and tt % self.plot_interval == 0:
+                    self.save_figures(tt, cmap=cmap)
+                    print(f"  Saved frame {tt:06d}.jpg")
+                if self.save_outputs and tt % self.save_interval == 0:
+                    self.u_output[self.outputs] = self.u2.copy()
+                    self.v_output[self.outputs] = self.v2.copy()
+                    self.h_output[self.outputs] = self.h2.copy()
+                    self.outputs += 1
+                self.update_uvh(tt)
 
 
 # ---------------------------------------------------------------------------
@@ -453,12 +490,11 @@ class simple2dmodel(ShallowWaterModel2DBase):
         DY: float = 1000,
         DT: float = 3.0,
         nt: int = 3000,
-        H_0: float = 1500.0,
+        initialc: str = "e",
+        H_0: Union[float, np.ndarray] = 1500,
         gravity: float = 9.81,
-        initialc: str = "c",
         omega: float = _DEFAULT_OMEGA,
         lat: float = 30,
-        period: float = 5000,
         nesting: bool = False,
         nest_ratio: float = 3,
         use_asselin: bool = False,
@@ -563,16 +599,16 @@ class channel2dmodel(ShallowWaterModel2DBase):
         DY: float = 1000,
         DT: float = 3.0,
         nt: int = 3000,
-        H_0: float = 2500.0,
+        period: int = 1500,
+        H_0: Union[float, np.ndarray] = 1500,
         gravity: float = 9.81,
         omega: float = _DEFAULT_OMEGA,
         lat: float = 30,
-        period: float = 1500,
+        nesting: bool = False,
+        nest_ratio: float = 3,
         use_asselin: bool = False,
         asselin_value: float = 0.1,
         asselin_step: int = 1,
-        nesting: bool = False,
-        nest_ratio: float = 3,
         calculate_metrics: bool = False,
         nestpos: Tuple[int, int, int, int] = (150, 150, 30, 30),
         dampening: int = 10,
@@ -690,7 +726,6 @@ class channel2dmodel(ShallowWaterModel2DBase):
         plt.savefig(f"{self.path}/sp_{tt:06d}.jpg", bbox_inches="tight", pad_inches=0.1)
         plt.close(fig)
 
-
 # ---------------------------------------------------------------------------
 # Custom initial conditions model: user provides h, u, v
 # ---------------------------------------------------------------------------
@@ -713,7 +748,7 @@ class custom_ic_2dmodel(ShallowWaterModel2DBase):
         DY: float = 1000,
         DT: float = 3.0,
         nt: int = 3000,
-        H_0: Union[float, np.ndarray] = 1500.0,
+        H_0: Union[float, np.ndarray] = 1500,
         gravity: float = 9.81,
         omega: float = _DEFAULT_OMEGA,
         lat: float = 30,
